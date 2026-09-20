@@ -175,7 +175,11 @@ Everything below is v1.2.0 (`versionCode 3`).
 | `app-armeabi-v7a-release.apk` | 29.0 MB |
 | `app-x86_64-release.apk` | 40.3 MB |
 | `app-universal-release.apk` | 104.6 MB |
-| `app-release.aab` | see `bundleRelease` output |
+| `app-release.aab` | 51.6 MB |
+
+Each release tag carries all four artifacts for direct download, e.g.
+[`v1.2.0`](https://github.com/fareza777/share-safe/releases/tag/v1.2.0) — use the `arm64-v8a` APK on
+any phone from 2016 or later, the `universal` APK if you are unsure, and the `.aab` for Play.
 
 Both release artifacts are signed with the **debug key on purpose**, so the APK in this repository
 can be installed over an earlier build from the same source (`adb install -r …`) instead of forcing
