@@ -193,7 +193,7 @@ Everything below is v1.3.0 (`versionCode 4`).
 | `app-release.aab` | 51.8 MB |
 
 Each release tag carries all four artifacts for direct download, e.g.
-[`v1.2.0`](https://github.com/fareza777/share-safe/releases/tag/v1.2.0) — use the `arm64-v8a` APK on
+[`v1.3.0`](https://github.com/fareza777/share-safe/releases/tag/v1.3.0) — use the `arm64-v8a` APK on
 any phone from 2016 or later, the `universal` APK if you are unsure, and the `.aab` for Play.
 
 Both release artifacts are signed with the **debug key on purpose**, so the APK in this repository
