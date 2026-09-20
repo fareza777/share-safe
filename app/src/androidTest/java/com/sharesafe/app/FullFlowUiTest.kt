@@ -204,6 +204,49 @@ class FullFlowUiTest {
         )
     }
 
+    /**
+     * Chat Privacy Mode, driven through the UI: every conversation layout is offered in the editor,
+     * selecting one re-runs detection without losing the export, and — the part that matters most —
+     * nothing is *suggested* for a screenshot that is not a conversation. The suggestion is the one
+     * piece of chat mode that acts on its own, so it has to be provably quiet when it is unsure.
+     */
+    @Test
+    fun chatLayoutsAreOfferedButNeverGuessedForAPlainScreenshot() {
+        dismissOnboardingIfPresent()
+        waitForTag(TestTags.HOME_RECENT_THUMB, timeoutMillis = 30_000)
+        composeRule.onAllNodesWithTag(TestTags.HOME_RECENT_THUMB)[0].performClick()
+        settle()
+        waitForTag(TestTags.PREVIEW_VERIFY_BANNER, timeoutMillis = 120_000)
+        composeRule.onNodeWithTag(TestTags.PREVIEW_BACK_TO_EDIT).performScrollTo().performClick()
+        settle()
+        waitForTag(TestTags.EDITOR_STATUS, timeoutMillis = 30_000)
+        waitForEnabled(TestTags.EDITOR_PREVIEW_SHARE, timeoutMillis = 90_000)
+
+        // The editor opens on the DETECT tab, which is the tab that owns the chat row.
+        waitForTag(TestTags.EDITOR_CHAT_ROW, timeoutMillis = 15_000)
+        assertEquals(
+            "a plain document screenshot must not be offered a conversation layout",
+            0,
+            nodeCount(TestTags.EDITOR_CHAT_SUGGESTION),
+        )
+
+        // Four layouts, addressed by model id so the assertions survive translation.
+        listOf("off", "whatsapp", "telegram", "dm").forEach { id ->
+            assertTrue(
+                "the editor should offer the $id chat layout",
+                nodeCount(TestTags.editorOption("chat-$id")) > 0,
+            )
+        }
+
+        // Switching the layout re-runs detection; the export action has to come back enabled.
+        composeRule.onNodeWithTag(TestTags.editorOption("chat-whatsapp")).performClick()
+        waitForEnabled(TestTags.EDITOR_PREVIEW_SHARE, timeoutMillis = 90_000)
+        assertTrue(
+            "the editor should stay usable after enabling a chat layout",
+            nodeCount(TestTags.EDITOR_STATUS) > 0,
+        )
+    }
+
     companion object {
         /**
          * Seeds a screenshot into MediaStore before the activity rule launches the app, so the

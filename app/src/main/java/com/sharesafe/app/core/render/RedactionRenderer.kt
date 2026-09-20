@@ -4,8 +4,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
+import com.sharesafe.app.core.model.FaceMaskStyle
 import com.sharesafe.app.core.model.RedactionStyle
 import kotlin.math.max
 
@@ -21,10 +26,19 @@ import kotlin.math.max
  *
  * Regions too small to hide anything with a mosaic or blur fall back to an average-colour fill,
  * which guarantees the text is gone even for a 20 px tall line.
+ *
+ * Faces can be drawn through a feathered oval instead of their bounding box ([FaceMaskStyle]). Only
+ * the *shape of the mask* changes — the same pixels are destroyed either way — because a hard
+ * rectangle around a face tells everyone exactly what was hidden, which is the opposite of the
+ * point. Rectangles are still used for the opaque styles: an oval black bar looks like a sticker,
+ * and there would be nothing soft about it anyway.
  */
 object RedactionRenderer {
 
     const val DEFAULT_TINT = 0xFF4F46E5.toInt()
+
+    /** Fully opaque out to 80% of the mask radius, then fading to nothing at the edge. */
+    private const val FEATHER_CORE = 0xFFFFFFFF.toInt()
 
     private const val MIN_BLOCK = 9
     private const val MAX_BLOCK = 40
@@ -37,22 +51,126 @@ object RedactionRenderer {
         style: RedactionStyle,
         strength: Float,
         tintColor: Int = DEFAULT_TINT,
+        maskRects: List<Rect> = emptyList(),
+        maskStyle: FaceMaskStyle = FaceMaskStyle.BOX,
     ): Bitmap {
-        if (rects.isEmpty()) return target
+        if (rects.isEmpty() && maskRects.isEmpty()) return target
         val output = Bitmaps.toMutableArgb8888(target)
         val canvas = Canvas(output)
+        // An oval only makes sense for the pixel-destroying styles; see the class comment.
+        val softMasks = maskStyle == FaceMaskStyle.SOFT_OVAL &&
+            (style == RedactionStyle.BLUR || style == RedactionStyle.PIXELATE)
+
         // Cosmetic styles first, opaque fills last, so an overlap can never weaken a black bar.
-        val ordered = rects.filterNotNull().sortedBy { if (isOpaque(style)) 1 else 0 }
-        ordered.forEach { rect ->
-            val safe = sanitize(rect, output.width, output.height) ?: return@forEach
-            when (style) {
-                RedactionStyle.BLACK_BAR -> opaqueFill(output, canvas, safe, Color.BLACK)
-                RedactionStyle.TINT -> opaqueFill(output, canvas, safe, tintColor)
-                RedactionStyle.PIXELATE -> pixelate(output, canvas, safe, strength)
-                RedactionStyle.BLUR -> blur(output, canvas, safe, strength)
+        val ordered = (rects + if (softMasks) emptyList() else maskRects)
+            .filterNotNull()
+            .sortedBy { if (isOpaque(style)) 1 else 0 }
+        ordered.forEach { rect -> drawOne(output, canvas, rect, style, strength, tintColor) }
+
+        if (softMasks) {
+            maskRects.forEach { rect ->
+                val safe = sanitize(rect, output.width, output.height) ?: return@forEach
+                softMask(output, canvas, safe, style, strength)
             }
         }
         return output
+    }
+
+    private fun drawOne(
+        target: Bitmap,
+        canvas: Canvas,
+        rect: Rect,
+        style: RedactionStyle,
+        strength: Float,
+        tintColor: Int,
+    ) {
+        val safe = sanitize(rect, target.width, target.height) ?: return
+        when (style) {
+            RedactionStyle.BLACK_BAR -> opaqueFill(target, canvas, safe, Color.BLACK)
+            RedactionStyle.TINT -> opaqueFill(target, canvas, safe, tintColor)
+            RedactionStyle.PIXELATE -> pixelate(target, canvas, safe, strength)
+            RedactionStyle.BLUR -> blur(target, canvas, safe, strength)
+        }
+    }
+
+    /**
+     * Destroys the pixels of [rect] with the current style, then fades the result out towards the
+     * edges of an inscribed ellipse. The fade is a radial alpha mask applied with `DST_IN`, which is
+     * why it is one composited bitmap rather than a clipped draw: a clipped oval would leave a hard,
+     * readable edge behind.
+     */
+    private fun softMask(
+        target: Bitmap,
+        canvas: Canvas,
+        rect: Rect,
+        style: RedactionStyle,
+        strength: Float,
+    ) {
+        val width = rect.width()
+        val height = rect.height()
+        if (width < 4 || height < 4) {
+            drawOne(target, canvas, rect, style, strength, DEFAULT_TINT)
+            return
+        }
+
+        var patch: Bitmap? = null
+        var feathered: Bitmap? = null
+        try {
+            patch = redactedPatch(target, rect, style, strength) ?: return
+            feathered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val patchCanvas = Canvas(feathered)
+            patchCanvas.drawBitmap(patch, 0f, 0f, null)
+
+            val radius = (max(width, height) / 2f) * 1.06f
+            val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                shader = RadialGradient(
+                    width / 2f,
+                    height / 2f,
+                    radius,
+                    intArrayOf(FEATHER_CORE, FEATHER_CORE, Color.TRANSPARENT),
+                    floatArrayOf(0f, 0.80f, 1f),
+                    Shader.TileMode.CLAMP,
+                )
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            }
+            // Stretch the circular gradient vertically so the feather follows the box's aspect.
+            val verticalScale = height.toFloat() / width.toFloat()
+            patchCanvas.save()
+            patchCanvas.scale(1f, verticalScale, 0f, 0f)
+            patchCanvas.drawRect(0f, 0f, width.toFloat(), width.toFloat(), maskPaint)
+            patchCanvas.restore()
+
+            canvas.drawBitmap(feathered, rect.left.toFloat(), rect.top.toFloat(), null)
+        } finally {
+            patch?.let { if (!it.isRecycled) it.recycle() }
+            feathered?.let { if (!it.isRecycled) it.recycle() }
+        }
+    }
+
+    /** A standalone, already-redacted copy of one rectangle — the input to the oval mask. */
+    private fun redactedPatch(
+        source: Bitmap,
+        rect: Rect,
+        style: RedactionStyle,
+        strength: Float,
+    ): Bitmap? {
+        val width = rect.width()
+        val height = rect.height()
+        if (width <= 0 || height <= 0) return null
+        var region: Bitmap? = null
+        return try {
+            region = Bitmap.createBitmap(source, rect.left, rect.top, width, height)
+            val patch = region.copy(Bitmap.Config.ARGB_8888, true) ?: return null
+            val local = Rect(0, 0, width, height)
+            when (style) {
+                RedactionStyle.PIXELATE -> pixelate(patch, Canvas(patch), local, strength)
+                RedactionStyle.BLUR -> blur(patch, Canvas(patch), local, strength)
+                else -> opaqueFill(patch, Canvas(patch), local, averageColor(source, rect))
+            }
+            patch
+        } finally {
+            region?.let { if (!it.isRecycled) it.recycle() }
+        }
     }
 
     private fun isOpaque(style: RedactionStyle): Boolean =

@@ -18,8 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sharesafe.app.core.batch.BatchProtectItem
+import com.sharesafe.app.data.HistoryStore
 import com.sharesafe.app.data.SettingsStore
 import com.sharesafe.app.ui.about.AboutScreen
+import com.sharesafe.app.ui.batch.BatchProtectScreen
+import com.sharesafe.app.ui.batch.BatchProtectViewModel
 import com.sharesafe.app.ui.editor.EditorPhase
 import com.sharesafe.app.ui.editor.EditorScreen
 import com.sharesafe.app.ui.editor.EditorViewModel
@@ -43,6 +47,7 @@ private enum class Screen(val depth: Int) {
     HISTORY(2),
     SETTINGS(2),
     EDITOR(2),
+    BATCH(2),
     ABOUT(3),
     PREVIEW(3),
 }
@@ -59,6 +64,7 @@ fun ShareSafeRoot(
     onShareTargetConsumed: () -> Unit = {},
 ) {
     val viewModel: EditorViewModel = viewModel()
+    val batchViewModel: BatchProtectViewModel = viewModel()
     val editorState by viewModel.state.collectAsState()
     val settings = SettingsStore.instance
     val animations by settings.animations.collectAsState()
@@ -113,6 +119,11 @@ fun ShareSafeRoot(
             }
 
             Screen.ABOUT -> Screen.SETTINGS
+            Screen.BATCH -> {
+                batchViewModel.reset()
+                Screen.HOME
+            }
+
             Screen.HISTORY, Screen.SETTINGS -> Screen.HOME
             else -> Screen.HOME
         }
@@ -161,11 +172,39 @@ fun ShareSafeRoot(
                     },
                     onOpenSettings = { screen = Screen.SETTINGS },
                     onOpenHistory = { screen = Screen.HISTORY },
+                    onStartBatch = { chosen ->
+                        batchViewModel.start(
+                            chosen.map { BatchProtectItem(it.uri, it.displayName) },
+                        )
+                        screen = Screen.BATCH
+                    },
                     animations = animations,
                 )
 
                 Screen.HISTORY -> HistoryScreen(
                     onBack = { screen = Screen.HOME },
+                    onReopen = { entry ->
+                        // Re-opening works on the stored *redacted* copy: the original was never
+                        // written to disk, and it never will be.
+                        HistoryStore.instance.shareUri(entry)?.let { uri ->
+                            viewModel.load(uri, entry.sourceName)
+                            screen = Screen.EDITOR
+                        }
+                    },
+                    animations = animations,
+                )
+
+                Screen.BATCH -> BatchProtectScreen(
+                    viewModel = batchViewModel,
+                    onBack = {
+                        batchViewModel.reset()
+                        screen = Screen.HOME
+                    },
+                    onOpenOne = { uri, name ->
+                        batchViewModel.reset()
+                        viewModel.load(uri, name)
+                        screen = Screen.EDITOR
+                    },
                     animations = animations,
                 )
 

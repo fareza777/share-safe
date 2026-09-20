@@ -7,10 +7,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -33,10 +38,15 @@ import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.CropSquare
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FaceRetouchingNatural
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -77,13 +87,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sharesafe.app.R
+import com.sharesafe.app.core.detect.ChatPreset
 import com.sharesafe.app.core.model.BackgroundStyle
 import com.sharesafe.app.core.model.BeautifyConfig
+import com.sharesafe.app.core.model.BeautifyPreset
+import com.sharesafe.app.core.model.FaceMaskStyle
 import com.sharesafe.app.core.model.RedactionStyle
 import com.sharesafe.app.core.model.SensitiveKind
 import com.sharesafe.app.ui.TestTags
+import com.sharesafe.app.ui.components.PlusUnlockDialog
 import com.sharesafe.app.ui.components.ShimmerBox
 import com.sharesafe.app.ui.components.SelectChip
+import com.sharesafe.app.ui.components.rememberPlusActive
 import com.sharesafe.app.ui.theme.KindManual
 
 private enum class EditorTab(val labelRes: Int) {
@@ -313,6 +328,14 @@ fun EditorScreen(
                         ) {
                             when (activeTab) {
                                 EditorTab.DETECT -> {
+                                    ChatSuggestion(
+                                        suggestion = state.suggestedChat
+                                            ?.takeIf { !state.chatSuggestionDismissed && state.chat == ChatPreset.OFF },
+                                        animations = animations,
+                                        onAccept = viewModel::acceptChatSuggestion,
+                                        onDismiss = viewModel::dismissChatSuggestion,
+                                    )
+                                    ChatPresetRow(preset = state.chat, onSelect = viewModel::setChat)
                                     KindChips(
                                         counts = counts,
                                         disabled = state.disabledKinds,
@@ -325,6 +348,10 @@ fun EditorScreen(
 
                                 EditorTab.TOOLS -> {
                                     ToolsSection(state = state, viewModel = viewModel)
+                                    BeautifyPresetsRow(
+                                        selected = state.beautifyPreset,
+                                        onSelect = viewModel::setBeautifyPreset,
+                                    )
                                     if (state.beautify.enabled) {
                                         BeautifySection(state = state, viewModel = viewModel)
                                     }
@@ -547,7 +574,225 @@ private fun StyleSection(state: EditorUiState, viewModel: EditorViewModel) {
                 )
             }
         }
+
+        Spacer(Modifier.height(10.dp))
+        FaceMaskRow(style = state.faceMask, onSelect = viewModel::setFaceMask)
     }
+}
+
+/**
+ * "This looks like a WhatsApp screenshot" — as a question, not a decision.
+ *
+ * The header geometry is reliable enough to offer a preset and not reliable enough to apply one: a
+ * title, a clock and a profile photo in the top band can describe a conversation or a settings
+ * screen, and only the user knows which. So the offer is one tap, it says which app it recognised,
+ * and declining changes nothing about the redaction already on screen.
+ */
+@Composable
+private fun ChatSuggestion(
+    suggestion: ChatPreset?,
+    animations: Boolean,
+    onAccept: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = suggestion != null,
+        enter = if (animations) expandVertically(tween(220)) + fadeIn(tween(180)) else
+            EnterTransition.None,
+        exit = if (animations) shrinkVertically(tween(180)) + fadeOut(tween(120)) else
+            ExitTransition.None,
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.EDITOR_CHAT_SUGGESTION),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 8.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.Forum,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = stringResource(
+                        R.string.editor_chat_suggest,
+                        stringResource(
+                            when (suggestion) {
+                                ChatPreset.WHATSAPP -> R.string.chat_whatsapp
+                                ChatPreset.TELEGRAM -> R.string.chat_telegram
+                                ChatPreset.DM -> R.string.chat_dm
+                                else -> R.string.chat_off
+                            },
+                        ),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = onAccept,
+                    modifier = Modifier.testTag(TestTags.EDITOR_CHAT_SUGGEST_ACCEPT),
+                ) { Text(stringResource(R.string.editor_chat_suggest_accept)) }
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag(TestTags.EDITOR_CHAT_SUGGEST_DISMISS),
+                ) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.action_cancel),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Chat Privacy Mode: which conversation layout the scan should be tuned for. Switching this re-runs
+ * detection, so it sits above the chips rather than next to the style options.
+ */
+@Composable
+private fun ChatPresetRow(preset: ChatPreset, onSelect: (ChatPreset) -> Unit) {
+    Column(Modifier.testTag(TestTags.EDITOR_CHAT_ROW)) {
+        Text(
+            text = stringResource(R.string.editor_chat_title),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(ChatPreset.entries.toList(), key = { it.name }) { entry ->
+                SelectChip(
+                    label = stringResource(
+                        when (entry) {
+                            ChatPreset.OFF -> R.string.chat_off
+                            ChatPreset.WHATSAPP -> R.string.chat_whatsapp
+                            ChatPreset.TELEGRAM -> R.string.chat_telegram
+                            ChatPreset.DM -> R.string.chat_dm
+                        },
+                    ),
+                    selected = preset == entry,
+                    icon = Icons.Rounded.Forum,
+                    modifier = Modifier.testTag(TestTags.editorOption("chat-${entry.id}")),
+                    onClick = { onSelect(entry) },
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.editor_chat_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Boxes around text, but a feathered oval around a person. */
+@Composable
+private fun FaceMaskRow(style: FaceMaskStyle, onSelect: (FaceMaskStyle) -> Unit) {
+    Column {
+        Text(
+            text = stringResource(R.string.editor_face_mask),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SelectChip(
+                label = stringResource(R.string.editor_face_mask_oval),
+                selected = style == FaceMaskStyle.SOFT_OVAL,
+                icon = Icons.Rounded.FaceRetouchingNatural,
+                onClick = { onSelect(FaceMaskStyle.SOFT_OVAL) },
+            )
+            SelectChip(
+                label = stringResource(R.string.editor_face_mask_box),
+                selected = style == FaceMaskStyle.BOX,
+                icon = Icons.Rounded.CropSquare,
+                onClick = { onSelect(FaceMaskStyle.BOX) },
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.editor_face_mask_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The looks that make an export look deliberate. Two of them are behind the rewarded window, and
+ * the chips say so instead of failing silently — tapping a locked one explains rather than ignores.
+ */
+@Composable
+private fun BeautifyPresetsRow(selected: BeautifyPreset, onSelect: (BeautifyPreset) -> Unit) {
+    val plusActive = rememberPlusActive()
+    var pendingPreset by remember { mutableStateOf<BeautifyPreset?>(null) }
+
+    Column(Modifier.testTag(TestTags.EDITOR_PRESET_ROW)) {
+        Text(
+            text = stringResource(R.string.editor_preset_title),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(BeautifyPreset.entries.toList(), key = { it.name }) { preset ->
+                val locked = preset.premium && !plusActive
+                SelectChip(
+                    label = stringResource(presetLabel(preset)),
+                    selected = selected == preset,
+                    icon = if (locked) Icons.Rounded.Lock else null,
+                    modifier = Modifier.testTag(TestTags.editorOption("preset-${preset.id}")),
+                    onClick = {
+                        if (locked) pendingPreset = preset else onSelect(preset)
+                    },
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.editor_preset_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+
+    pendingPreset?.let { preset ->
+        PlusUnlockDialog(
+            title = stringResource(R.string.editor_preset_locked_title, stringResource(presetLabel(preset))),
+            body = stringResource(R.string.editor_preset_locked_body),
+            confirmLabel = stringResource(R.string.plus_watch),
+            alternativeLabel = stringResource(R.string.editor_preset_use_free),
+            onAlternative = {
+                pendingPreset = null
+                onSelect(BeautifyPreset.CLEAN)
+            },
+            onDismiss = { pendingPreset = null },
+            onUnlocked = {
+                pendingPreset = null
+                onSelect(preset)
+            },
+        )
+    }
+}
+
+private fun presetLabel(preset: BeautifyPreset): Int = when (preset) {
+    BeautifyPreset.OFF -> R.string.preset_off
+    BeautifyPreset.CLEAN -> R.string.preset_clean
+    BeautifyPreset.NIGHT -> R.string.preset_night
+    BeautifyPreset.SOLID -> R.string.preset_solid
+    BeautifyPreset.AURORA -> R.string.preset_aurora
+    BeautifyPreset.STUDIO -> R.string.preset_studio
 }
 
 @Composable
@@ -608,6 +853,12 @@ private fun BeautifySection(state: EditorUiState, viewModel: EditorViewModel) {
             range = 0f..BeautifyConfig.MAX_CORNER,
             onChange = { value -> viewModel.setBeautify { it.copy(cornerFraction = value) } },
         )
+        LabeledSlider(
+            label = stringResource(R.string.editor_beautify_shadow),
+            value = config.shadow,
+            range = 0f..1f,
+            onChange = { value -> viewModel.setBeautify { it.copy(shadow = value) } },
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.editor_beautify_background),
@@ -624,6 +875,7 @@ private fun BeautifySection(state: EditorUiState, viewModel: EditorViewModel) {
                             BackgroundStyle.NIGHT -> R.string.editor_bg_dark
                             BackgroundStyle.PAPER -> R.string.editor_bg_light
                             BackgroundStyle.GRADIENT -> R.string.editor_bg_gradient
+                            BackgroundStyle.SOLID -> R.string.editor_bg_solid
                         },
                     ),
                     selected = config.background == background,

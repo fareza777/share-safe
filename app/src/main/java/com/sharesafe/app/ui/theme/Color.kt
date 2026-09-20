@@ -58,3 +58,7 @@ val KindNumber = Color(0xFF8D99AE)
 val KindCode = Color(0xFF1DD1A1)
 val KindFace = Color(0xFFFF9F43)
 val KindManual = Color(0xFFE8E8F5)
+
+/** Chat Privacy Mode: the conversation header reads as one family. */
+val KindName = Color(0xFFFF6B9D)
+val KindAvatar = Color(0xFFFFB86C)

@@ -3,6 +3,7 @@ package com.sharesafe.app.core.export
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 
 /**
  * Sharing is a plain ACTION_SEND with a read grant on one cached file. Nothing is copied to the
@@ -42,6 +43,36 @@ object ShareHelper {
             setPackage(packageName)
             if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+
+    /**
+     * Batch hand-off: several finished files in one ACTION_SEND_MULTIPLE. The clip data carries a
+     * read grant per URI, which is what actually lets a receiving app open them on API 29+.
+     */
+    fun shareManyIntent(
+        context: Context,
+        uris: List<Uri>,
+        title: String,
+        mimeType: String = "image/*",
+        caption: String? = null,
+    ): Intent {
+        val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = mimeType
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            if (!caption.isNullOrBlank()) putExtra(Intent.EXTRA_TEXT, caption)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = android.content.ClipData.newUri(
+                context.contentResolver,
+                "ShareSafe",
+                uris.first(),
+            ).apply {
+                uris.drop(1).forEach { addItem(android.content.ClipData.Item(it)) }
+            }
+        }
+        return Intent.createChooser(send, title).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
 
     fun isInstalled(context: Context, packageName: String): Boolean = runCatching {
         context.packageManager.getPackageInfo(packageName, PackageManager.MATCH_ALL)

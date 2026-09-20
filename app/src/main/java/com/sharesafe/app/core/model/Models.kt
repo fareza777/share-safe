@@ -115,6 +115,10 @@ enum class KindGroup { TEXT, CODE, FACE, MANUAL }
  */
 enum class SensitiveKind(val group: KindGroup, val defaultEnabled: Boolean) {
     PHONE(KindGroup.TEXT, true),
+    /** Chat Privacy Mode: the contact or sender name in a conversation header. */
+    NAME(KindGroup.TEXT, true),
+    /** Chat Privacy Mode: profile pictures, found as faces on a conversation header. */
+    AVATAR(KindGroup.FACE, true),
     EMAIL(KindGroup.TEXT, true),
     CARD(KindGroup.TEXT, true),
     ID_NUMBER(KindGroup.TEXT, true),
@@ -135,8 +139,8 @@ enum class SensitiveKind(val group: KindGroup, val defaultEnabled: Boolean) {
     companion object {
         /** Order used by the UI chips. */
         val chipOrder: List<SensitiveKind> = listOf(
-            PHONE, EMAIL, CARD, ID_NUMBER, PASSPORT, ACCOUNT_NUMBER, OTP, DOB, SECRET, LOCATION,
-            NETWORK, PLATE, LONG_NUMBER, ADDRESS, QR, FACE,
+            PHONE, NAME, AVATAR, EMAIL, CARD, ID_NUMBER, PASSPORT, ACCOUNT_NUMBER, OTP, DOB,
+            SECRET, LOCATION, NETWORK, PLATE, LONG_NUMBER, ADDRESS, QR, FACE,
         )
     }
 }
@@ -169,6 +173,9 @@ data class RedactionRegion(
                 detections.filter { it.enabled }.forEach { add(RedactionRegion(it.bounds, true)) }
                 manual.forEach { add(RedactionRegion(it.bounds, true)) }
             }
+
+        /** Kinds that are a photo of a person rather than text, and so get the mask treatment. */
+        val FACE_LIKE_KINDS: Set<SensitiveKind> = setOf(SensitiveKind.FACE, SensitiveKind.AVATAR)
     }
 }
 
@@ -177,7 +184,10 @@ enum class BackgroundStyle(val id: String) {
     AUTO("auto"),
     NIGHT("night"),
     PAPER("paper"),
-    GRADIENT("gradient");
+    GRADIENT("gradient"),
+
+    /** One flat colour sampled from the screenshot itself. */
+    SOLID("solid");
 
     companion object {
         fun fromId(id: String?): BackgroundStyle = entries.firstOrNull { it.id == id } ?: AUTO
@@ -189,10 +199,72 @@ data class BeautifyConfig(
     val paddingFraction: Float = 0.06f,
     val cornerFraction: Float = 0.04f,
     val background: BackgroundStyle = BackgroundStyle.AUTO,
+    /** 0 = no drop shadow, 1 = deepest. Only meaningful when [enabled]. */
+    val shadow: Float = 0.5f,
 ) {
     companion object {
         const val MAX_PADDING = 0.16f
         const val MAX_CORNER = 0.12f
+
+        fun of(preset: BeautifyPreset): BeautifyConfig = when (preset) {
+            BeautifyPreset.OFF -> BeautifyConfig()
+            else -> BeautifyConfig(
+                enabled = true,
+                paddingFraction = preset.padding,
+                cornerFraction = preset.corner,
+                background = preset.background,
+                shadow = preset.shadow,
+            )
+        }
+    }
+}
+
+/**
+ * Ready-made looks. Four are free and two are premium: this is the one place where a rewarded video
+ * buys something, and what it buys is a background — never a safety feature.
+ *
+ * A preset is just a [BeautifyConfig], so anything a preset sets can still be adjusted by hand
+ * afterwards; the presets exist to make the good-looking result the default, not to hide the knobs.
+ */
+enum class BeautifyPreset(
+    val id: String,
+    val premium: Boolean,
+    val padding: Float,
+    val corner: Float,
+    val background: BackgroundStyle,
+    val shadow: Float,
+) {
+    OFF("off", false, 0f, 0f, BackgroundStyle.AUTO, 0f),
+    CLEAN("clean", false, 0.05f, 0.035f, BackgroundStyle.PAPER, 0.30f),
+    NIGHT("night", false, 0.06f, 0.045f, BackgroundStyle.NIGHT, 0.55f),
+    SOLID("solid", false, 0.06f, 0.040f, BackgroundStyle.SOLID, 0.45f),
+
+    /** Premium: a wide, shadowed frame on a violet-to-teal gradient. */
+    AURORA("aurora", true, 0.09f, 0.060f, BackgroundStyle.GRADIENT, 0.80f),
+
+    /** Premium: the biggest, darkest frame, for screenshots that should look like a spec sheet. */
+    STUDIO("studio", true, 0.12f, 0.075f, BackgroundStyle.NIGHT, 1.00f);
+
+    companion object {
+        val DEFAULT = CLEAN
+        fun fromId(id: String?): BeautifyPreset = entries.firstOrNull { it.id == id } ?: DEFAULT
+    }
+}
+
+/**
+ * How face-like detections are drawn.
+ *
+ * Boxes are the honest default for text, but a rectangle around a face reads as "someone censored
+ * this", which is exactly what the user is trying not to broadcast. [SOFT_OVAL] feathered-masks the
+ * face instead, so nothing is redacted any less — it just stops looking like a sticker.
+ */
+enum class FaceMaskStyle(val id: String) {
+    BOX("box"),
+    SOFT_OVAL("oval");
+
+    companion object {
+        val DEFAULT = SOFT_OVAL
+        fun fromId(id: String?): FaceMaskStyle = entries.firstOrNull { it.id == id } ?: DEFAULT
     }
 }
 

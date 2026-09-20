@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -100,6 +101,8 @@ fun HistoryScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     animations: Boolean = true,
+    /** Re-opens the stored **redacted** copy in the editor for another pass. */
+    onReopen: (HistoryEntry) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -225,6 +228,7 @@ fun HistoryScreen(
                                     HistoryRow(
                                         entry = entry,
                                         onShare = { share(entry) },
+                                        onReopen = { onReopen(entry) },
                                         onDelete = { store.delete(entry.id) },
                                     )
                                 }
@@ -479,6 +483,7 @@ private fun DayCell(
 private fun HistoryRow(
     entry: HistoryEntry,
     onShare: () -> Unit,
+    onReopen: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -577,6 +582,15 @@ private fun HistoryRow(
                 }
             }
 
+            IconButton(
+                onClick = onReopen,
+                modifier = Modifier.testTag(TestTags.HISTORY_REOPEN),
+            ) {
+                Icon(
+                    Icons.Rounded.Tune,
+                    contentDescription = stringResource(R.string.history_reopen),
+                )
+            }
             IconButton(onClick = onShare) {
                 Icon(
                     Icons.AutoMirrored.Rounded.Send,

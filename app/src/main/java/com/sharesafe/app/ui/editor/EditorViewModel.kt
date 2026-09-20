@@ -7,6 +7,7 @@ import android.graphics.Rect
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sharesafe.app.core.detect.ChatPreset
 import com.sharesafe.app.core.detect.ScanOptions
 import com.sharesafe.app.core.detect.SensitiveScanner
 import com.sharesafe.app.core.export.ExportOptions
@@ -19,6 +20,9 @@ import com.sharesafe.app.core.model.Detection
 import com.sharesafe.app.core.model.IntRect
 import com.sharesafe.app.core.model.ManualRegion
 import com.sharesafe.app.core.model.NormRect
+import com.sharesafe.app.core.model.BeautifyPreset
+import com.sharesafe.app.core.model.FaceMaskStyle
+import com.sharesafe.app.core.model.RedactionRegion
 import com.sharesafe.app.core.model.RedactionStyle
 import com.sharesafe.app.core.model.SensitiveKind
 import com.sharesafe.app.core.render.AutoTrim
@@ -27,8 +31,7 @@ import com.sharesafe.app.core.render.Bitmaps
 import com.sharesafe.app.core.render.RedactionRenderer
 import com.sharesafe.app.core.render.RenderPipeline
 import com.sharesafe.app.core.render.Bitmaps.sanitized
-import com.sharesafe.app.core.verify.AutoFixPlanner
-import com.sharesafe.app.core.verify.RedactionVerifier
+import com.sharesafe.app.core.verify.SecureRender
 import com.sharesafe.app.core.verify.VerifyResult
 import com.sharesafe.app.data.HistoryStore
 import com.sharesafe.app.data.SettingsStore
@@ -61,6 +64,18 @@ data class EditorUiState(
     val cropConfig: CropConfig = CropConfig(),
     val cropRect: IntRect = IntRect(0, 0, 1, 1),
     val beautify: BeautifyConfig = BeautifyConfig(),
+    /** Which beautify look is currently applied, so the preset row can show it as selected. */
+    val beautifyPreset: BeautifyPreset = BeautifyPreset.OFF,
+    val faceMask: FaceMaskStyle = FaceMaskStyle.DEFAULT,
+    /** Chat Privacy Mode: which conversation layout the scan is tuned for. */
+    val chat: ChatPreset = ChatPreset.DEFAULT,
+    /**
+     * A conversation layout the last scan recognised without being asked. Shown as a suggestion and
+     * never applied silently: the geometry is good enough to offer, not good enough to act on.
+     */
+    val suggestedChat: ChatPreset? = null,
+    /** Set once the user answers the suggestion, so it is not offered again for this image. */
+    val chatSuggestionDismissed: Boolean = false,
     val preview: Bitmap? = null,
     val previewContentRect: Rect? = null,
     val previewRedactedRects: List<Rect> = emptyList(),
@@ -83,6 +98,15 @@ data class EditorUiState(
         detections.filter { isDetectionActive(it) }.forEach { add(it.bounds) }
         manualRegions.forEach { add(it.bounds) }
     }
+
+    /**
+     * The active detections that are a person rather than text. They are redacted with the same
+     * strength but a different mask shape, and deliberately overlap [activeRegions] rather than
+     * replacing it: the renderer takes them out of the ordinary list itself.
+     */
+    fun activeFaceRegions(): List<NormRect> = detections
+        .filter { isDetectionActive(it) && it.kind in RedactionRegion.FACE_LIKE_KINDS }
+        .map { it.bounds }
 
     companion object {
         const val DEFAULT_STRENGTH = 0.75f
@@ -187,7 +211,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             exportedBitmap?.let { old -> if (!old.isRecycled) old.recycle() }
             exportedBitmap = null
 
-            _state.value = EditorUiState(
+            val resumePreset = SettingsStore.instance.beautifyPreset.value
+            .takeIf { preset -> _state.value.beautifyPreset == BeautifyPreset.OFF }
+        _state.value = EditorUiState(
                 phase = EditorPhase.READY,
                 source = loaded,
                 sourceName = displayName,
@@ -196,7 +222,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 tintColor = _state.value.tintColor,
                 disabledKinds = initialDisabledKinds(),
                 cropConfig = _state.value.cropConfig,
-                beautify = _state.value.beautify,
+                beautify = resumePreset?.let { BeautifyConfig.of(it) } ?: _state.value.beautify,
+                beautifyPreset = resumePreset ?: _state.value.beautifyPreset,
+                faceMask = SettingsStore.instance.faceMask.value,
+                chat = _state.value.chat,
                 scanning = true,
             )
             _preview.value = PreviewUiState()
@@ -227,6 +256,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             detectCodes = true,
             detectFaces = settings.detectFaces.value,
             includeLongNumbers = settings.longNumbers.value,
+            chat = _state.value.chat,
         )
         val result = SensitiveScanner.scan(analysis, options) { partial ->
             // Publish text hits immediately: barcode and face passes finish seconds later.
@@ -245,6 +275,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 scanning = false,
                 scanDurationMs = result.durationMs,
                 warnings = result.warnings,
+                suggestedChat = result.suggestedChat,
+                chatSuggestionDismissed = false,
                 disabledDetectionIds = if (autoSelect) {
                     emptySet()
                 } else {
@@ -377,6 +409,53 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         requestRender()
     }
 
+    /**
+     * Switches the conversation preset. Detection results are preset-dependent, so this re-runs the
+     * pass rather than only re-rendering — that is also why the manual regions survive: they are a
+     * separate list.
+     */
+    fun setChat(preset: ChatPreset) {
+        if (_state.value.chat == preset) return
+        // Answered by hand either way, so the suggestion has served its purpose.
+        _state.update { it.copy(chat = preset, chatSuggestionDismissed = true) }
+        if (_state.value.source != null) {
+            _state.update { it.copy(scanning = true, warnings = emptyList()) }
+            viewModelScope.launch { scan() }
+        }
+    }
+
+    /**
+     * Accepts the recognised conversation layout. This re-runs the pass, because the preset adds a
+     * header name and marks the profile picture as an avatar rather than as a plain face.
+     */
+    fun acceptChatSuggestion() {
+        val suggestion = _state.value.suggestedChat ?: return
+        _state.update { it.copy(chatSuggestionDismissed = true) }
+        setChat(suggestion)
+    }
+
+    /** Keeps the scan as it is. Nothing is redacted differently by ignoring it. */
+    fun dismissChatSuggestion() {
+        _state.update { it.copy(chatSuggestionDismissed = true) }
+    }
+
+    fun setFaceMask(style: FaceMaskStyle) {
+        if (_state.value.faceMask == style) return
+        _state.update { it.copy(faceMask = style) }
+        SettingsStore.instance.setFaceMask(style)
+        requestRender()
+    }
+
+    /**
+     * Applies a beautify look. The preset only fills in the parameters the user can still tweak by
+     * hand afterwards, which is why this writes a whole [BeautifyConfig] instead of a flag.
+     */
+    fun setBeautifyPreset(preset: BeautifyPreset) {
+        _state.update { it.copy(beautifyPreset = preset, beautify = BeautifyConfig.of(preset)) }
+        SettingsStore.instance.setBeautifyPreset(preset)
+        requestRender()
+    }
+
     fun setCropConfig(config: CropConfig) {
         _state.update { it.copy(cropConfig = config) }
         recomputeCrop()
@@ -439,6 +518,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             source = source,
             crop = snapshot.cropRect.sanitized(source.width, source.height),
             regions = snapshot.activeRegions(),
+            faceRegions = snapshot.activeFaceRegions(),
+            faceMask = snapshot.faceMask,
             style = snapshot.style,
             strength = snapshot.strength,
             tintColor = snapshot.tintColor,
@@ -498,6 +579,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 source = source,
                 crop = snapshot.cropRect.sanitized(source.width, source.height),
                 regions = snapshot.activeRegions(),
+                faceRegions = snapshot.activeFaceRegions(),
+                faceMask = snapshot.faceMask,
                 style = snapshot.style,
                 strength = snapshot.strength,
                 tintColor = snapshot.tintColor,
@@ -508,8 +591,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 runCatching {
                     renderVerified(
                         request = request,
+                        // The comparison frame is the *original*, so it carries no redaction at
+                        // all — face masks included, exactly like the text boxes before them.
                         previewRequest = request.copy(
                             regions = emptyList(),
+                            faceRegions = emptyList(),
                             targetMaxDim = previewMaxDim(),
                         ),
                         ignoreKinds = ignoreKinds,
@@ -556,63 +642,27 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         autoFix: Boolean,
         checkFaces: Boolean,
     ): PreparedExport {
-        var current = request
-        var rendered = RenderPipeline.renderDetailed(current)
-        val repaired = ArrayList<NormRect>()
+        val outcome = SecureRender.renderVerified(
+            request = request,
+            ignoreKinds = ignoreKinds,
+            verifyEnabled = verifyEnabled,
+            autoFix = autoFix,
+            checkFaces = checkFaces,
+            maxRounds = MAX_AUTO_FIX_ROUNDS,
+        )
 
-        var verdict = if (verifyEnabled) {
-            RedactionVerifier.verify(
-                exported = rendered.bitmap,
-                redactedRects = rendered.redactedRects,
-                checkFaces = checkFaces,
-                ignoreKinds = ignoreKinds,
-            )
-        } else {
-            null
-        }
-
-        var rounds = 0
-        while (autoFix && verdict != null && verdict.completed && !verdict.isClean &&
-            rounds < MAX_AUTO_FIX_ROUNDS
-        ) {
-            val content = rendered.contentRect
-            val additions = AutoFixPlanner.plan(
-                leftovers = verdict.leftoverBounds,
-                content = IntRect(content.left, content.top, content.right, content.bottom),
-                crop = current.crop,
-                sourceWidth = request.source.width,
-                sourceHeight = request.source.height,
-                exportedWidth = rendered.bitmap.width,
-                exportedHeight = rendered.bitmap.height,
-                existing = current.regions,
-            )
-            if (additions.isEmpty()) break
-
-            repaired += additions
-            val previous = rendered.bitmap
-            current = current.copy(regions = current.regions + additions)
-            rendered = RenderPipeline.renderDetailed(current)
-            if (previous !== rendered.bitmap && !previous.isRecycled) previous.recycle()
-            verdict = RedactionVerifier.verify(
-                exported = rendered.bitmap,
-                redactedRects = rendered.redactedRects,
-                checkFaces = checkFaces,
-                ignoreKinds = ignoreKinds,
-            )
-            rounds++
-        }
-
-        // A second, small pass without regions powers the before/after comparison.
+        // A second, small pass without regions powers the before/after comparison. It is not part of
+        // the shared loop because it exists for the editor's hold-to-compare and nothing else.
         val original = runCatching { RenderPipeline.renderDetailed(previewRequest) }
             .getOrNull()
             ?.bitmap
 
         return PreparedExport(
-            bitmap = rendered.bitmap,
-            redactedRects = rendered.redactedRects,
+            bitmap = outcome.bitmap,
+            redactedRects = outcome.redactedRects,
             original = original,
-            verify = verdict,
-            repaired = repaired,
+            verify = outcome.verify,
+            repaired = outcome.repaired,
         )
     }
 
@@ -737,24 +787,20 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         super.onCleared()
     }
 
-    private fun initialStyle(): RedactionStyle =
-        RedactionStyle.fromId(SettingsStore.instance.lastStyle.value)
+    /** Session style if the user already picked one, otherwise the configured default. */
+    private fun initialStyle(): RedactionStyle {
+        val settings = SettingsStore.instance
+        return settings.lastStyle.value
+            ?.let { RedactionStyle.fromId(it) }
+            ?: settings.defaultStyle.value
+    }
 
     /**
      * The disabled set follows the user's detection defaults: faces and long digit runs are only
      * on when they said so in Settings.
      */
-    private fun initialDisabledKinds(): Set<SensitiveKind> {
-        val settings = SettingsStore.instance
-        val disabled = EditorUiState.defaultDisabledKinds().toMutableSet()
-        if (settings.detectFaces.value) disabled.remove(SensitiveKind.FACE)
-        if (settings.longNumbers.value) disabled.remove(SensitiveKind.LONG_NUMBER)
-        if (!settings.extraHeuristics.value) {
-            disabled += SensitiveKind.NETWORK
-            disabled += SensitiveKind.PLATE
-        }
-        return disabled
-    }
+    private fun initialDisabledKinds(): Set<SensitiveKind> =
+        SettingsStore.instance.defaultDisabledKinds()
 
     private companion object {
         const val ANALYSIS_MAX_DIM = 1600

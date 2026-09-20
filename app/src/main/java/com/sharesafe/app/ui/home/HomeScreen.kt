@@ -75,16 +75,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.sharesafe.app.R
-import com.sharesafe.app.core.batch.BatchItem
+import com.sharesafe.app.core.ads.AdsConfig
 import com.sharesafe.app.core.batch.BatchProgress
-import com.sharesafe.app.core.batch.BatchRedactor
-import com.sharesafe.app.core.batch.BatchSummary
-import com.sharesafe.app.core.detect.ScanOptions
 import com.sharesafe.app.core.history.HistoryCalendar
 import com.sharesafe.app.core.image.BitmapLoader
 import com.sharesafe.app.core.image.ScreenshotItem
 import com.sharesafe.app.core.image.ScreenshotRepository
-import com.sharesafe.app.core.model.RedactionStyle
 import com.sharesafe.app.data.HistoryStore
 import com.sharesafe.app.data.SettingsStore
 import com.sharesafe.app.ui.TestTags
@@ -92,9 +88,11 @@ import com.sharesafe.app.ui.components.AdBanner
 import com.sharesafe.app.ui.components.AnimatedCounter
 import com.sharesafe.app.ui.components.AppearIn
 import com.sharesafe.app.ui.components.InfoRow
+import com.sharesafe.app.ui.components.PlusUnlockDialog
 import com.sharesafe.app.ui.components.SectionHeader
 import com.sharesafe.app.ui.components.SelectChip
 import com.sharesafe.app.ui.components.rememberAdsVisible
+import com.sharesafe.app.ui.components.rememberPlusActive
 import com.sharesafe.app.ui.components.rememberPressScale
 import com.sharesafe.app.ui.theme.MintSecondary
 import com.sharesafe.app.ui.theme.VioletPrimary
@@ -120,6 +118,8 @@ fun HomeScreen(
     onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
     animations: Boolean = true,
+    /** Hands the selection to Batch Protect, which runs it one image at a time. */
+    onStartBatch: (List<ScreenshotItem>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -131,8 +131,10 @@ fun HomeScreen(
     var mediaAccess by remember { mutableStateOf(ScreenshotRepository.canReadGallery(context)) }
     var selectionMode by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var batchProgress by remember { mutableStateOf<BatchProgress?>(null) }
-    var batchSummary by remember { mutableStateOf<BatchSummary?>(null) }
+    // A selection larger than the free batch size asks first instead of refusing: the dialog's
+    // second option simply runs the first few images, so nothing is ever blocked outright.
+    var batchPrompt by remember { mutableStateOf<List<ScreenshotItem>?>(null) }
+    val plusActive = rememberPlusActive()
 
     val historyEntries by HistoryStore.instance.entries.collectAsState()
     val historyStats = remember(historyEntries) { HistoryCalendar.stats(historyEntries) }
@@ -173,26 +175,12 @@ fun HomeScreen(
         val chosen = items.filter { it.uri.toString() in selected }
         if (chosen.isEmpty()) return
         exitSelection()
-        val scanOptions = ScanOptions(
-            detectCodes = true,
-            detectFaces = settings.detectFaces.value,
-            includeLongNumbers = settings.longNumbers.value,
-        )
-        scope.launch {
-            batchProgress = BatchProgress(0, chosen.size)
-            batchSummary = BatchRedactor.redactToGallery(
-                context = context,
-                items = chosen.map { BatchItem(it.uri, it.displayName) },
-                scanOptions = scanOptions,
-                exportOptions = settings.exportOptions(),
-                style = RedactionStyle.fromId(settings.lastStyle.value),
-                strength = settings.lastStrength.value,
-                onProgress = { batchProgress = it },
-            )
-            batchProgress = null
-            BitmapLoader.clearThumbnailCache()
-            refresh()
+        if (chosen.size > AdsConfig.FREE_BATCH_LIMIT && !plusActive) {
+            batchPrompt = chosen
+            return
         }
+        BitmapLoader.clearThumbnailCache()
+        onStartBatch(chosen)
     }
 
     Column(
@@ -251,8 +239,6 @@ fun HomeScreen(
             )
         }
 
-        batchProgress?.let { progress -> BatchCard(progress) }
-
         AppearIn(enabled = animations, index = 4) { FlowSteps() }
 
         RecentSection(
@@ -300,39 +286,23 @@ fun HomeScreen(
         )
     }
 
-    batchSummary?.let { summary ->
-        AlertDialog(
-            onDismissRequest = { batchSummary = null },
-            title = { Text(stringResource(R.string.home_batch_title)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = if (summary.failed == 0) {
-                            stringResource(R.string.home_batch_done, summary.saved)
-                        } else {
-                            stringResource(
-                                R.string.home_batch_partial,
-                                summary.saved,
-                                summary.failed,
-                            )
-                        },
-                    )
-                    if (summary.regionsRedacted > 0) {
-                        Text(
-                            text = stringResource(
-                                R.string.home_batch_regions,
-                                summary.regionsRedacted,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+    batchPrompt?.let { chosen ->
+        PlusUnlockDialog(
+            title = stringResource(R.string.batch_limit_title, chosen.size),
+            body = stringResource(R.string.batch_limit_body, AdsConfig.FREE_BATCH_LIMIT),
+            confirmLabel = stringResource(R.string.batch_limit_watch),
+            alternativeLabel = stringResource(
+                R.string.batch_limit_first,
+                AdsConfig.FREE_BATCH_LIMIT,
+            ),
+            onAlternative = {
+                batchPrompt = null
+                onStartBatch(chosen.take(AdsConfig.FREE_BATCH_LIMIT))
             },
-            confirmButton = {
-                TextButton(onClick = { batchSummary = null }) {
-                    Text(stringResource(R.string.action_done))
-                }
+            onDismiss = { batchPrompt = null },
+            onUnlocked = {
+                batchPrompt = null
+                onStartBatch(chosen)
             },
         )
     }

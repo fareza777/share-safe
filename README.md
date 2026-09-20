@@ -16,13 +16,16 @@ package name, or code was copied.
 
 Verified on-device on Android 16 (API 36):
 
-- 72 JVM unit tests, all passing (`:app:testDebugUnitTest`)
-- 18 instrumented tests on a real emulator (`:app:connectedDebugAndroidTest`), including the
-  one-tap automatic path, the calendar history, the language switch, and the assertion that the two
-  screens showing the user's own pixels carry no ad slot at all
-- The minified release APK was driven by hand end-to-end: pick screenshot → 3 sensitive areas found
-  → redact → preview → *"Verified: the exported image contains no detectable sensitive data."* →
-  saved to `Pictures/ShareSafe`
+- 96 JVM unit tests, all passing (`:app:testDebugUnitTest`)
+- 22 instrumented tests on a real emulator (`:app:connectedDebugAndroidTest`), including the
+  one-tap automatic path, the calendar history, the language switch, the whole Batch Protect run,
+  the long-screenshot memory budget, and the assertion that the two screens showing the user's own
+  pixels carry no ad slot at all
+- The minified release build (`assembleRelease`, R8 on) was driven by hand on the emulator: it
+  installs over the previous release with `adb install -r` → opening a shared screenshot lands in
+  the editor with **3 sensitive areas found** and the chat-layout row present → *Preview & share* →
+  **"Verified clean: no readable sensitive data left in the exported image. Checked text, QR codes
+  and faces."** → *Save to gallery* writes a new file to `Pictures/ShareSafe`, with no crash logged
 - Android Lint: `lintRelease` passes with **no errors**; the remaining warnings are all style
   suggestions (`UseKtx`, plural candidates, pinned dependency versions)
 
@@ -60,22 +63,31 @@ The app is built so the safe outcome is the default, not a reward for careful ma
   maps those rectangles from exported space back through beautify padding and crop into source space,
   the renderer hides them, and verification runs again (max two rounds). Anything the user switched
   off is excluded from both the verdict and the repair.
-- **Batch.** Long-press to select several screenshots and redact them all to `Pictures/ShareSafe`,
-  each of them recorded in History.
+- **Batch, one image at a time.** Long-press to select several screenshots and redact them all to
+  `Pictures/ShareSafe`, each recorded in History. A batch runs **sequentially on purpose**: every
+  image is decoded, scanned, redacted, verified, repaired and written before the next one is opened,
+  so peak memory is one full-resolution bitmap plus a handful of 320 px thumbnails regardless of how
+  many images were selected. Each run goes through the same verify-and-repair loop as a single
+  export, which is what makes “a batch is not less safe” a fact instead of a hope.
+- **Chat Privacy Mode.** A screenshot from WhatsApp, Telegram or a generic DM can be tagged with its
+  layout, which adds the conversation-header name and the profile pictures as ordinary detections —
+  switched on, individually toggleable, and correctable by hand before export. The presets are
+  suggested automatically when the image looks like a conversation, never applied silently.
 
 ## Feature set
 
 | Area | Implemented |
 | --- | --- |
-| Input | System photo picker, recent-screenshot strip, batch multi-select, incoming `ACTION_SEND` share target |
+| Input | System photo picker, recent-screenshot strip, batch multi-select (**Batch Protect** screen with per-row progress, per-item preview, retry and share-all), incoming `ACTION_SEND` share target |
 | Detection | Phone numbers (ID + international), email, card numbers (Luhn-checked), NIK, NPWP, passport (keyword-gated), account numbers and IBAN, OTP codes (found by context), leaked secrets (cloud/API keys, JWTs, private-key headers, bearer tokens, `password:`/WiFi passphrase assignments), network addresses (IPv4/IPv6/MAC), licence plates, keyword-gated street addresses (opt-in), optional long digit runs, QR/barcode payloads (QRIS payments, 2FA secrets, WiFi, contacts, payment and social links), face boxes |
-| Redaction | Blur, pixelate, black bar, tint; adjustable strength; per-detection toggle; drag-to-add and drag-to-move regions; undo/redo/reset; automatic repair of verified leftovers |
+| Redaction | Blur, pixelate, black bar, tint; adjustable strength; per-detection toggle; drag-to-add and drag-to-move regions; undo/redo/reset; automatic repair of verified leftovers; faces masked as boxes or soft ovals ("hide the boxes on faces") |
+| Chat privacy | Chat Privacy Mode for WhatsApp / Telegram / DM layouts: header name + profile picture added as toggleable detections, suggested automatically from the image |
 | Cropping | Auto-trim status bar + navigation bar, optional trim of blank edges, all on one normalized geometry model |
-| Beautify | Padding, rounded corners, four background styles: auto (gradient from the screenshot's own average colour), gradient, night, paper |
+| Beautify | Padding, rounded corners, drop shadow, and premium presets — **Clean, Night, Solid, Aurora, Studio** — each a fixed combination of padding, corner radius, shadow and background (solid or gradient). Auto/pick-your-own background still available; the two heaviest presets (Aurora, Studio) are unlocked by one rewarded video, while the other four are free and stay free |
 | Export | Permanent bake-in (never a layer), PNG/JPEG with adjustable JPEG quality, size caps (original/1080/720), save to gallery, Safe Share sheet, direct WhatsApp/Telegram hand-off, optional auto-save on export |
-| History | Calendar view of every export with day dots, per-day list, thumbnails, stats (exports, areas hidden, active days, day streak), re-share and delete; stores only the redacted copy, never the original |
+| History | Calendar view of every export with day dots, per-day list, thumbnails, stats (exports, areas hidden, active days, day streak), re-share, **re-open in the editor** and delete; stores only the redacted copy, never the original, and never leaves the device |
 | UX | Animated splash, four-page animated onboarding (replayable from About), single-action home with trust chips + stats + recents strip, gesture canvas (pan + pinch zoom), Material 3 theme with five palettes + Material You + light/dark/system, **English by default** (with Bahasa Indonesia and "device language" one tap away), animations and haptics toggles, About screen with rate/share/licences, Settings as collapsible top-down cards |
-| Ads | Google Mobile Ads, configured with Google's **test** application id and test ad units only: a banner on chrome screens (Home, History, Settings, About — never on the editor or the preview), an interstitial rationed by a pure policy (from the 2nd share, at most once every 90 s), and an optional rewarded video that removes all ads for 24 h |
+| Ads | Google Mobile Ads, configured with Google's **test** application id and test ad units only: a banner on chrome screens (Home, History, Settings, About, Batch — never on the editor or the preview), an interstitial rationed by a pure policy (from the 3rd share, at most once every 2 minutes, and never while an edit is in progress), and an optional rewarded video that lifts the free five-image batch limit and removes all ads for 24 h |
 
 ## Privacy model
 
@@ -105,9 +117,12 @@ The privacy story changed when advertising was added, and the honest version is 
   dependency that talks to the network, and it can be disabled by flipping `AdsConfig.ENABLED` to
   `false` — no call site changes.
 - **Ads are rationed, and one policy file decides.** `InterstitialPolicy` (pure, unit-tested) allows
-  an interstitial only from the second share onward and at most once every 90 seconds; the banner
-  never appears on the editor or the preview; a rewarded video removes all ads for 24 hours. No
-  redaction capability is ever behind an ad.
+  an interstitial only from the third share onward, at most once every two minutes; the banner never
+  appears on the editor or the preview — the two screens that render the user's own pixels; a
+  rewarded video removes all ads for 24 hours and lifts the free five-image batch limit. **No
+  redaction capability is ever behind an ad**: the batch limit is a shortcut, not a wall, because the
+  same images can always be selected again in smaller groups, and every detection, style, preset and
+  verification pass stays available in the free tier.
 
 ## Permissions & Google Play checklist
 
@@ -167,15 +182,15 @@ Toolchain: Gradle 8.14.3, AGP 8.13.1, Kotlin 2.2.20, Compose BOM 2025.10.01, Jav
 
 ### Artifacts
 
-Everything below is v1.2.0 (`versionCode 3`).
+Everything below is v1.3.0 (`versionCode 4`).
 
 | Output | Size |
 | --- | --- |
-| `app-arm64-v8a-release.apk` | 37.7 MB |
-| `app-armeabi-v7a-release.apk` | 29.0 MB |
-| `app-x86_64-release.apk` | 40.3 MB |
+| `app-arm64-v8a-release.apk` | 37.8 MB |
+| `app-armeabi-v7a-release.apk` | 29.1 MB |
+| `app-x86_64-release.apk` | 40.4 MB |
 | `app-universal-release.apk` | 104.6 MB |
-| `app-release.aab` | 51.6 MB |
+| `app-release.aab` | 51.8 MB |
 
 Each release tag carries all four artifacts for direct download, e.g.
 [`v1.2.0`](https://github.com/fareza777/share-safe/releases/tag/v1.2.0) — use the `arm64-v8a` APK on
@@ -200,19 +215,23 @@ app/src/main/java/com/sharesafe/app/
 ├── core/
 │   ├── model/        IntRect / NormRect / Detection / RedactionStyle / BeautifyConfig
 │   ├── detect/       SensitivePatterns (pure regex), DetectionMapper, SensitiveScanner,
-│   │                 OcrEngine, CodeEngine, CodePayloadClassifier, FaceEngine, MlKitAwait
+│   │                 OcrEngine, CodeEngine, CodePayloadClassifier, FaceEngine, MlKitAwait,
+│   │                 ChatHeuristics (pure chat-layout geometry + preset suggestion)
 │   ├── render/       RenderPipeline (the only place pixels are produced), RedactionRenderer,
 │   │                 BeautifyRenderer, AutoTrim, Bitmaps
-│   ├── image/        ScreenshotRepository (MediaStore), BitmapLoader
-│   ├── batch/        BatchRedactor (multi-image pass to the gallery)
-│   ├── verify/       RedactionVerifier (post-export re-scan) + AutoFixPlanner (leftover → source)
+│   ├── image/        ScreenshotRepository (MediaStore), BitmapLoader (source cap + thumbnails)
+│   ├── batch/        BatchProtectEngine (one image at a time, verified, memory-bounded),
+│   │                 BatchRedactor (the older multi-image gallery pass)
+│   ├── verify/       SecureRender (render → verify → repair → verify, shared by editor and batch),
+│   │                 RedactionVerifier (post-export re-scan) + AutoFixPlanner (leftover → source)
 │   ├── history/      HistoryEntry / HistoryCodec / HistoryCalendar (pure, unit-tested)
 │   ├── ads/          AdsConfig (test inventory + master switch), InterstitialPolicy (pure)
 │   └── export/       ImageExporter (MediaStore write), ExportOptions, ShareHelper
 ├── ui/               ShareSafeRoot (animated navigation), splash/, onboarding/, home/, editor/
-│                     (ViewModel + gesture canvas), preview/, history/, settings/, about/,
-│                     LocaleSupport, components/ (Motion: counters, shimmer, appear-in; AdSlots:
-│                     banner / interstitial / rewarded wrappers), theme/ (5 palettes)
+│                     (ViewModel + gesture canvas), preview/, batch/ (Batch Protect),
+│                     history/, settings/, about/, LocaleSupport, components/ (Motion: counters,
+│                     shimmer, appear-in; AdSlots: banner / interstitial / rewarded wrappers;
+│                     PlusUnlock: the shared rewarded-unlock dialog), theme/ (5 palettes)
 └── data/             SettingsStore, HistoryStore
 ```
 
@@ -220,9 +239,18 @@ Design rules worth keeping:
 
 - All geometry is normalized (0..1) in the model and converted to pixels in exactly one place, so
   preview, export, and verification can never disagree.
-- `SensitivePatterns`, `DetectionMapper`, `AutoTrim`, `HistoryCalendar` and `InterstitialPolicy`
-  are pure Kotlin (no Android types) and are what the JVM unit tests target. The rule that decides
-  when a user may be interrupted by an ad is testable precisely because it is not a callback.
+- `SensitivePatterns`, `DetectionMapper`, `AutoTrim`, `HistoryCalendar`, `ChatHeuristics`,
+  `SensitiveScanner`'s scoring, `BeautifyPreset` and `InterstitialPolicy` are pure Kotlin (no Android
+  types, or in the scanner's case no Android calls) and are what the JVM unit tests target. The rule
+  that decides when a user may be interrupted by an ad is testable precisely because it is not a
+  callback; the rule that decides where a conversation's name sits is testable because it is geometry
+  rather than a vision model.
+- `SecureRender` is the single implementation of render → verify → repair → verify. The editor's
+  export and Batch Protect both call it, so "the batch is verified too" is enforced by there being
+  only one loop, not by remembering to copy it.
+- Memory is bounded by construction, not by luck: `BitmapLoader.MAX_SOURCE_DIM` caps every decode
+  (a 1080×7200 long screenshot is downscaled, not decoded at native size), the batch engine holds
+  exactly one decoded image (`MAX_CONCURRENT_IMAGES = 1`) and the UI holds only 320 px thumbnails.
 - Ads live behind `AdsConfig.ENABLED` and three slot wrappers; no composable builds an `AdView` or
   issues a `load()` call itself, so "where may an ad appear" is answerable by reading one file.
 - The render pipeline always works on its own copy of the source bitmap — redaction can never
@@ -234,13 +262,14 @@ Design rules worth keeping:
 
 | Suite | Covers |
 | --- | --- |
-| `SensitivePatternsTest`, `ExtraHeuristicsTest`, `DetectionMapperTest`, `AutoTrimTest`, `ModelGeometryTest`, `CodePayloadClassifierTest`, `HistoryCodecTest`, `AutoFixPlannerTest`, `InterstitialPolicyTest` (72 tests) | Regex heuristics (including network addresses, plates, addresses, IBAN), QR payload classification, normalized↔pixel geometry, auto-trim, the history line format and calendar maths, the leftover→source mapping the automatic repair depends on, the ad-frequency policy, and a guard that every ad unit id is still Google's test inventory |
+| `SensitivePatternsTest`, `ExtraHeuristicsTest`, `DetectionMapperTest`, `AutoTrimTest`, `ModelGeometryTest`, `CodePayloadClassifierTest`, `HistoryCodecTest`, `AutoFixPlannerTest`, `InterstitialPolicyTest`, `ChatPrivacyModeTest`, `BeautifyPresetTest` (96 tests) | Regex heuristics (including network addresses, plates, addresses, IBAN), QR payload classification, normalized↔pixel geometry, auto-trim, the history line format and calendar maths, the leftover→source mapping the automatic repair depends on, the ad-frequency policy and the free batch limit, chat-layout geometry and preset suggestion, the beautify presets and the face-mask styles, and a guard that every ad unit id is still Google's test inventory |
 | `RedactionPipelineInstrumentedTest` | Real ML Kit OCR/barcode/face detection on a synthetic screenshot, redaction styles, crop + beautify path, export, and the verifier |
 | `FullFlowUiTest` | The single primary action, one-tap protect → preview → keep editing → editor → preview → save through the actual Compose UI, plus the assertion that the editor and preview carry no ad slot |
 | `AutoHistoryUiTest` | The one-tap path end to end on device: verify → repair → save → History shows the entry |
 | `ThemeSwitchInstrumentedTest` | Every palette applies without leaving Settings, About is reachable through its collapsed card, and switching the language to Indonesian relabels the running Activity |
 | `PermissionPolicyInstrumentedTest` | The merged manifest of the installed APK declares nothing outside a reviewed allow-list, uses exactly the two network permissions ads need, and requests nothing that could read the rest of the phone |
 | `AppLaunchInstrumentedTest` | Cold start does not crash (application init, theme resolution, first composition) |
+| `BatchProtectInstrumentedTest` | Multi-select → Batch Protect → every row terminal → summary through the real UI; then the engine itself on three seeded images including a 1080×7200 long screenshot: all finished, all written to the gallery, thumbnails inside the 320 px cap, and heap growth across the run inside a stated ceiling. Also pins that a tall screenshot is decoded inside `MAX_SOURCE_DIM` and that the engine still touches **one** image at a time |
 
 Dark mode was checked objectively (mean screen luminance 89 vs 231 in light) and the release build
 was smoke-tested for the whole flow, so the R8 rules and permission stripping are known-good on
@@ -265,6 +294,17 @@ device, not just at compile time.
   either pass.
 - History stores the redacted copies capped at 120 entries and a 1440 px long edge, so it cannot
   grow without bound.
+- **Chat Privacy Mode is geometric, and the README says so.** It hides the conversation *header*
+  (name band + avatar) and adds profile pictures, because those are the parts a layout determines.
+  Sender names *inside* message bubbles are deliberately not attempted: picking a person's name out
+  of a message body needs name recognition, and a guess would either miss it or eat the message. The
+  phone numbers, e-mails, codes and links in those bubbles are covered by the ordinary patterns, and
+  the manual editor is one tap away for the rest — which is why every chat detection arrives as an
+  ordinary, individually toggleable box rather than a black box the user has to trust.
+- Batch Protect holds no full-resolution bitmap in the UI layer: the engine writes each result to the
+  gallery and drops it before opening the next, so the progress screen is thumbnails only. The cost
+  is that a batch cannot be re-rendered from memory — re-running one means selecting the images
+  again, which is the same reason the limit is a shortcut rather than a wall.
 
 ## Ringkasan (ID)
 
@@ -284,6 +324,28 @@ screenshot, lalu pindai → sensor → potong → render → verifikasi → perb
 langsung mendarat di pratinjau. Ketuk thumbnail di daftar “Screenshot terbaru” untuk hasil yang sama
 pada gambar itu, atau tekan lama untuk memilih beberapa sekaligus (batch). Editor manual tetap ada,
 satu ketukan di balik tombol “Lanjut mengedit” di pratinjau.
+
+Tahap kedua menambahkan beberapa hal yang selama ini harus dikerjakan manual:
+
+- **Chat Privacy Mode** untuk screenshot WhatsApp/Telegram/DM: nama di header percakapan dan foto
+  profil ikut tersensor otomatis, mode-nya bahkan disarankan sendiri saat gambar terlihat seperti
+  percakapan. Semua hasilnya tetap kotak biasa yang bisa dimatikan atau digeser satu per satu.
+- **Batch Protect**: pilih beberapa screenshot, lalu satu per satu dipindai, disensor, diverifikasi,
+  diperbaiki dan disimpan — **satu gambar dalam satu waktu**, jadi pemakaian memori tidak tumbuh
+  mengikuti jumlah gambar (screenshot panjang 1080×7200 pun diturunkan resolusinya sebelum diproses).
+  Setiap baris punya progres sendiri, bisa dibuka pratinjaunya, diulang bila gagal, dan semuanya bisa
+  dibagikan sekaligus. Lima gambar pertama gratis (grup lebih besar bisa dibuka dengan satu video).
+- **Beautify premium**: shadow, latar solid/gradien, dan lima preset siap pakai (Clean, Night, Solid,
+  Aurora, Studio) — bukan editor foto, hanya pembingkai.
+- **Sensor wajah tanpa kotak**: pilihan masker oval lembut supaya sensor wajah tidak terlihat seperti
+  stiker “disensor”, termasuk bisa dijadikan bawaan di Pengaturan.
+- **Riwayat bisa dibuka ulang** langsung di editor, selain dibagikan ulang dan dihapus; semua salinan
+  sensor disimpan lokal di perangkat.
+
+Kebijakan iklannya juga lebih ketat: interstitial baru muncul mulai ekspor **ketiga** dan maksimal
+sekali per dua menit, banner tidak pernah ada di editor maupun pratinjau (dua layar yang menampilkan
+piksel milik pengguna), dan **tidak ada kemampuan penyensoran yang dikunci iklan** — batas batch
+adalah jalan pintas, bukan tembok, karena gambar yang sama selalu bisa dipilih ulang dalam grup kecil.
 
 Bawaan bahasa sekarang **Inggris**; Bahasa Indonesia tersedia satu ketukan di Pengaturan → Tampilan,
 begitu pula tema (bawaan terang). Pelengkapnya: splash beranimasi, onboarding empat halaman yang

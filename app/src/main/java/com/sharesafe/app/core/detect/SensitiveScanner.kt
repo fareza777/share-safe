@@ -13,6 +13,12 @@ data class ScanOptions(
     val detectFaces: Boolean = true,
     /** Off by default: highlighting every long digit run also highlights tracking numbers. */
     val includeLongNumbers: Boolean = false,
+    /**
+     * Chat Privacy Mode. Adds the conversation-header name and the profile pictures, and changes
+     * nothing else about the pass: the ordinary patterns keep running, which is why a phone number
+     * shown as a contact name still reads as a phone number.
+     */
+    val chat: ChatPreset = ChatPreset.DEFAULT,
 )
 
 data class ScanResult(
@@ -21,6 +27,11 @@ data class ScanResult(
     /** Non-fatal problems worth telling the user about, e.g. a recognizer that failed. */
     val warnings: List<String>,
     val durationMs: Long,
+    /**
+     * A conversation layout the header geometry agreed on, offered as a one-tap suggestion when the
+     * user has not already chosen a preset. Null when the screenshot does not look like a chat.
+     */
+    val suggestedChat: ChatPreset? = null,
 )
 
 /**
@@ -86,21 +97,39 @@ object SensitiveScanner {
                     origin = DetectionOrigin.BARCODE,
                 )
             }
-            val faceDetections = faces.mapIndexed { index, bounds ->
-                Detection(
-                    id = "face-${index + 1}",
-                    kind = SensitiveKind.FACE,
-                    bounds = bounds,
-                    label = "Face",
-                    origin = DetectionOrigin.FACE,
-                )
+
+            // Chat Privacy Mode: a face in a conversation header is somebody's profile picture, so
+            // it is reported as an avatar (and masked as one) instead of as a plain face. Faces
+            // that are avatars are not reported twice.
+            val avatarHits = ChatHeuristics.avatarDetections(faces, options.chat)
+            val avatarIndices = avatarHits.mapTo(HashSet()) { it.faceIndex }
+            val faceDetections = faces.mapIndexedNotNull { index, bounds ->
+                if (index in avatarIndices) {
+                    null
+                } else {
+                    Detection(
+                        id = "face-${index + 1}",
+                        kind = SensitiveKind.FACE,
+                        bounds = bounds,
+                        label = "Face",
+                        origin = DetectionOrigin.FACE,
+                    )
+                }
             }
+            val nameDetections = ChatHeuristics.dropCovered(
+                candidates = ChatHeuristics.nameDetections(spans, options.chat),
+                existing = textDetections + codeDetections,
+            )
 
             ScanResult(
-                detections = DetectionMapper.finalize(textDetections + codeDetections + faceDetections),
+                detections = DetectionMapper.finalize(
+                    textDetections + codeDetections + faceDetections + nameDetections +
+                        avatarHits.map { it.detection },
+                ),
                 text = spans.joinToString("\n") { it.text },
                 warnings = warnings.toList(),
                 durationMs = SystemClock.elapsedRealtime() - started,
+                suggestedChat = if (options.chat.isChat) null else ChatHeuristics.detectPreset(spans, faces),
             )
         }
 

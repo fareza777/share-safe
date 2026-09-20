@@ -11,7 +11,6 @@
     <string name="home_action_title">Amankan sebuah screenshot</string>
     <string name="home_action_body">Pilih satu gambar. Pemindaian, penyensoran, verifikasi, dan perbaikan berjalan sendiri.</string>
     <string name="home_action_badge">Otomatis</string>
-    <string name="home_pick_title">Pilih screenshot</string>
     <string name="home_pick_body">Memakai pemilih foto Android — tanpa izin galeri</string>
     <string name="home_stat_exports">Sudah disensor</string>
     <string name="home_stat_regions">Area disembunyikan</string>
@@ -29,9 +28,6 @@
     <string name="home_redact_selected">Sensor %1$d</string>
     <string name="home_batch_title">Sensor massal</string>
     <string name="home_batch_running">Menyensor %1$d dari %2$d…</string>
-    <string name="home_batch_done">%1$d gambar sudah disensor dan disimpan ke Pictures/ShareSafe.</string>
-    <string name="home_batch_partial">%1$d tersimpan, %2$d gagal. Gambar asli tidak diubah.</string>
-    <string name="home_batch_regions">Total %1$d area disembunyikan</string>
     <string name="home_media_disclosure_title">Akses galeri</string>
     <string name="home_media_disclosure_body">ShareSafe meminta akses foto hanya untuk menampilkan screenshot terbaru di layar utama. Gambar dibaca di perangkat ini, disensor di perangkat ini, dan tidak pernah diunggah. Akses galeri bersifat opsional — pemilih foto sistem tetap bisa dipakai tanpa izin ini.</string>
     <string name="home_media_disclosure_accept">Izinkan akses galeri</string>
@@ -250,7 +246,6 @@
     <string name="settings_privacy">Privasi</string>
     <string name="settings_privacy_summary">Yang berjalan offline, dan yang boleh dilihat iklan</string>
     <string name="settings_on_device_body">Pemindaian, penyensoran, dan verifikasi berjalan di perangkat ini dengan model bawaan.</string>
-    <string name="settings_no_internet_body">Tidak ada hasil dari screenshot Anda yang menyentuh jaringan. Satu-satunya pemakaian jaringan adalah slot iklan.</string>
     <string name="settings_permissions_body">Izin: akses foto, internet untuk iklan, dan advertising ID. Tanpa lokasi, kamera, atau kontak.</string>
     <string name="settings_ads">Iklan</string>
     <string name="settings_ads_summary">Cara aplikasi ini tetap gratis</string>
@@ -287,6 +282,92 @@
     <string name="about_replay_onboarding">Tampilkan intro lagi</string>
     <string name="about_replay_body">Intro akan muncul saat aplikasi dibuka berikutnya, tanpa mengubah pengaturan Anda.</string>
     <string name="about_footer">Dibuat agar screenshot tidak lagi berisiko. Tanpa akun, tanpa unggahan, dan tidak ada iklan yang melihat gambar Anda.</string>
+
+    <!-- Batch Protect -->
+    <string name="batch_title">Lindungi massal</string>
+    <string name="batch_subtitle_running">Melindungi %1$d dari %2$d…</string>
+    <string name="batch_subtitle_done">Terlindungi %1$d dari %2$d</string>
+    <string name="batch_working">Melindungi…</string>
+    <string name="batch_finished">Selesai</string>
+    <string name="batch_memory_note">Gambar didekode satu per satu dan dilepas sebelum gambar berikutnya dibuka, jadi screenshot panjang tidak menumpuk di memori.</string>
+    <string name="batch_failed_note">%1$d gagal dilindungi. Coba lagi hanya untuk gambar itu.</string>
+    <string name="batch_summary_title">Batch selesai</string>
+    <string name="batch_summary_body">%1$d dari %2$d gambar disensor dan diverifikasi.</string>
+    <string name="batch_summary_regions">Area disembunyikan: %1$d</string>
+    <string name="batch_summary_review">Perlu dicek: %1$d</string>
+    <string name="batch_share_all">Bagikan %1$d gambar</string>
+    <string name="batch_share_body">Satu lembar berbagi dengan semua hasil sensor terlampir.</string>
+    <string name="batch_share_title">Bagikan %1$d gambar tersensor</string>
+    <string name="batch_share_empty">Belum ada yang bisa dibagikan.</string>
+    <string name="batch_share_failed">Tidak ada aplikasi yang menerima gambar.</string>
+    <string name="batch_share_one">Bagikan</string>
+    <string name="batch_error_title">Batch berhenti</string>
+    <string name="batch_unnamed">Screenshot</string>
+    <string name="batch_row_queued">Menunggu</string>
+    <string name="batch_row_working">Memindai…</string>
+    <string name="batch_row_failed">Gagal — %1$s</string>
+    <string name="batch_row_review">%1$d area · cek dulu</string>
+    <string name="batch_row_verified">%1$d area terverifikasi</string>
+    <string name="batch_row_done">%1$d area disembunyikan</string>
+    <string name="batch_saved_note">Setiap hasil disimpan ke Riwayat sebagai salinan tersensor.</string>
+    <string name="batch_retry_failed">Coba lagi %1$d yang gagal</string>
+    <string name="batch_empty_title">Belum ada yang dipilih</string>
+    <string name="batch_empty_body">Pilih screenshot dari galeri untuk dilindungi sekaligus.</string>
+    <string name="batch_detail_title">Pratinjau</string>
+    <string name="batch_open_note">Buka di editor untuk menambah atau menghapus area. Perubahan apa pun diverifikasi ulang sebelum ekspor.</string>
+    <string name="batch_open_in_editor">Buka di editor</string>
+    <string name="batch_running_back">Lindungi massal tetap berjalan.</string>
+    <string name="batch_limit_title">Lindungi semua %1$d gambar?</string>
+    <string name="batch_limit_body">Batch gratis melindungi maksimal %1$d gambar sekaligus. Video singkat membuka batasnya selama 24 jam.</string>
+    <string name="batch_limit_watch">Tonton dan buka batasnya</string>
+    <string name="batch_limit_first">Lindungi %1$d pertama</string>
+
+    <!-- Mode privasi chat -->
+    <string name="editor_chat_title">Mode privasi chat</string>
+    <string name="editor_chat_body">Dioptimalkan untuk screenshot percakapan: mencari nama kontak, avatar, dan status bar yang membocorkan lawan bicara Anda. Semua temuannya tetap bisa diedit manual.</string>
+    <string name="editor_chat_suggest">Sepertinya screenshot %1$s. Cari nama dan foto profilnya juga?</string>
+    <string name="editor_chat_suggest_accept">Ya</string>
+    <string name="chat_off">Mati</string>
+    <string name="chat_whatsapp">WhatsApp</string>
+    <string name="chat_telegram">Telegram</string>
+    <string name="chat_dm">DM</string>
+    <string name="category_name">Nama</string>
+    <string name="category_avatar">Avatar</string>
+
+    <!-- Beautify -->
+    <string name="editor_preset_title">Tampilan</string>
+    <string name="editor_preset_body">Padding, sudut, latar, dan bayangan dalam satu ketukan. Semua nilainya masih bisa diatur di bawah.</string>
+    <string name="editor_preset_locked_title">%1$s adalah tampilan Plus</string>
+    <string name="editor_preset_locked_body">Video singkat membuka semua tampilan selama 24 jam dan menghapus banner. Tampilan gratis tetap gratis.</string>
+    <string name="editor_preset_use_free">Pakai tampilan gratis</string>
+    <string name="editor_beautify_shadow">Bayangan</string>
+    <string name="editor_bg_solid">Solid</string>
+    <string name="preset_off">Asli</string>
+    <string name="preset_clean">Bersih</string>
+    <string name="preset_night">Malam</string>
+    <string name="preset_solid">Solid</string>
+    <string name="preset_aurora">Aurora</string>
+    <string name="preset_studio">Studio</string>
+    <string name="editor_face_mask">Penutup wajah</string>
+    <string name="editor_face_mask_oval">Oval lembut</string>
+    <string name="editor_face_mask_box">Kotak</string>
+    <string name="editor_face_mask_body">Bentuk oval melembutkan tepi penutup wajah sehingga terlihat seperti blur, bukan kotak sensor.</string>
+
+    <!-- Plus -->
+    <string name="plus_title">ShareSafe Plus</string>
+    <string name="plus_body">Satu video singkat membuka 24 jam tanpa banner, tanpa interstitial, semua tampilan beautify, dan batch tanpa batas. Semua fitur sensor tetap gratis.</string>
+    <string name="plus_watch">Tonton video</string>
+    <string name="plus_active_body">Tanpa banner, tanpa interstitial, semua tampilan terbuka, dan batch tanpa batas.</string>
+
+    <!-- Pernyataan privasi -->
+    <string name="privacy_processing_title">Diproses di perangkat</string>
+    <string name="privacy_processing_body">Pengenalan teks, pencocokan pola, pembacaan barcode, deteksi wajah, dan seluruh proses render berjalan di HP, dengan model yang ikut terpasang di dalam aplikasi.</string>
+    <string name="privacy_account_title">Tidak butuh akun</string>
+    <string name="privacy_account_body">Tidak ada login, tidak ada profil, tidak ada identitas yang terikat pada Anda. Tidak ada yang perlu diakses, dipulihkan, atau bisa bocor.</string>
+    <string name="privacy_upload_title">Screenshot Anda tidak pernah diunggah</string>
+    <string name="privacy_upload_body">Tidak ada satu pun jalur kode yang mengirim gambar, nama berkas, atau hasil pemindaian ke mana pun. Riwayat adalah folder lokal; menghapus aplikasi menghapus semuanya.</string>
+    <string name="history_reopen">Buka lagi di editor</string>
+    <string name="settings_default_style">Sensor default</string>
 
     <!-- Common -->
     <string name="action_back">Kembali</string>

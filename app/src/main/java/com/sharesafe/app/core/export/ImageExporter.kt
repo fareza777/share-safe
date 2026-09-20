@@ -23,7 +23,11 @@ object ImageExporter {
 
     private const val SHARE_DIR = "share"
     private const val GALLERY_FOLDER = "ShareSafe"
+    private const val GALLERY_FOLDER_LABEL = "Pictures/$GALLERY_FOLDER"
     private const val MAX_CACHED_FILES = 6
+
+    /** How many images may be handed to one share sheet at a time. */
+    const val MAX_SHARE_BATCH = 12
 
     suspend fun exportForShare(
         context: Context,
@@ -39,13 +43,27 @@ object ImageExporter {
         SharePayload(uri = uri, mimeType = options.format.mimeType)
     }
 
-    /** Inserts into Pictures/ShareSafe through MediaStore; no permission needed on API 29+. */
+    /**
+     * Inserts into Pictures/ShareSafe through MediaStore; no permission needed on API 29+.
+     * Returns the destination folder for the "Saved to …" message.
+     */
     suspend fun saveToGallery(
         context: Context,
         bitmap: Bitmap,
         options: ExportOptions = ExportOptions.DEFAULT,
         displayName: String = "sharesafe_${System.currentTimeMillis()}",
-    ): String? = withContext(Dispatchers.IO) {
+    ): String? = saveToGalleryUri(context, bitmap, options, displayName)?.let { GALLERY_FOLDER_LABEL }
+
+    /**
+     * The same write, but returning the MediaStore URI — which is what a batch needs in order to
+     * hand several finished images to a share sheet without keeping any of them in memory.
+     */
+    suspend fun saveToGalleryUri(
+        context: Context,
+        bitmap: Bitmap,
+        options: ExportOptions = ExportOptions.DEFAULT,
+        displayName: String = "sharesafe_${System.currentTimeMillis()}",
+    ): Uri? = withContext(Dispatchers.IO) {
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, "$displayName.${options.format.extension}")
             put(MediaStore.Images.Media.MIME_TYPE, options.format.mimeType)
@@ -61,7 +79,7 @@ object ImageExporter {
             values.clear()
             values.put(MediaStore.Images.Media.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
-            "Pictures/$GALLERY_FOLDER"
+            uri
         } catch (error: Throwable) {
             runCatching { resolver.delete(uri, null, null) }
             throw error

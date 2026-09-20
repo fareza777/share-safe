@@ -35,12 +35,14 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.BrightnessAuto
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.CropSquare
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.FaceRetouchingNatural
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LightMode
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MotionPhotosOn
 import androidx.compose.material.icons.rounded.Numbers
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material.icons.rounded.Router
 import androidx.compose.material.icons.rounded.SaveAlt
@@ -56,9 +59,7 @@ import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.Vibration
-import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,26 +89,27 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.sharesafe.app.R
-import com.sharesafe.app.core.ads.AD_FREE_WINDOW_MILLIS
 import com.sharesafe.app.core.export.ExportFormat
 import com.sharesafe.app.core.export.ExportOptions
+import com.sharesafe.app.core.model.FaceMaskStyle
+import com.sharesafe.app.core.model.RedactionStyle
 import com.sharesafe.app.data.AppLanguage
 import com.sharesafe.app.data.HistoryStore
 import com.sharesafe.app.data.SettingsStore
 import com.sharesafe.app.data.ThemeMode
 import com.sharesafe.app.ui.LocaleSupport
 import com.sharesafe.app.ui.TestTags
-import com.sharesafe.app.ui.components.AdBanner
 import com.sharesafe.app.ui.components.InfoRow
+import com.sharesafe.app.ui.components.PlusUnlockDialog
 import com.sharesafe.app.ui.components.SelectChip
 import com.sharesafe.app.ui.components.SwitchRow
-import com.sharesafe.app.ui.components.rememberAdsVisible
-import com.sharesafe.app.ui.components.rememberRewardedSlot
+import com.sharesafe.app.ui.components.rememberPlusActive
+import com.sharesafe.app.ui.editor.styleIcon
+import com.sharesafe.app.ui.editor.styleLabel
 import com.sharesafe.app.ui.theme.MintSecondary
 import com.sharesafe.app.ui.theme.ThemePalette
 import com.sharesafe.app.ui.theme.VioletPrimary
 import com.sharesafe.app.ui.theme.lightColors
-import com.sharesafe.app.ui.toastOnMain
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -131,7 +133,6 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val settings = SettingsStore.instance
-    val adsVisible = rememberAdsVisible()
 
     val themeMode by settings.themeMode.collectAsState()
     val palette by settings.palette.collectAsState()
@@ -151,6 +152,9 @@ fun SettingsScreen(
     val exportFormat by settings.exportFormat.collectAsState()
     val exportSize by settings.exportSize.collectAsState()
     val jpegQuality by settings.jpegQuality.collectAsState()
+    val defaultStyle by settings.defaultStyle.collectAsState()
+    val faceMask by settings.faceMask.collectAsState()
+    val plusActive = rememberPlusActive()
     val adFreeUntil by settings.adFreeUntil.collectAsState()
 
     val historyEntries by HistoryStore.instance.entries.collectAsState()
@@ -205,6 +209,7 @@ fun SettingsScreen(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // The launch screen of Settings is the top card; the rest are one tap away.
             SettingsSection.entries.forEach { section ->
                 SettingCard(
                     section = section,
@@ -266,18 +271,22 @@ fun SettingsScreen(
                             detectFaces = detectFaces,
                             longNumbers = longNumbers,
                             extraHeuristics = extraHeuristics,
+                            faceMask = faceMask,
                             onDetectFaces = { settings.setDetectFaces(it) },
                             onLongNumbers = { settings.setLongNumbers(it) },
                             onExtraHeuristics = { settings.setExtraHeuristics(it) },
+                            onFaceMask = { settings.setFaceMask(it) },
                         )
 
                         SettingsSection.EXPORT -> ExportSection(
                             format = exportFormat,
                             size = exportSize,
                             quality = jpegQuality,
+                            defaultStyle = defaultStyle,
                             onFormat = { settings.setExportFormat(it) },
                             onSize = { settings.setExportSize(it) },
                             onQuality = { settings.setJpegQuality(it) },
+                            onDefaultStyle = { settings.setDefaultStyle(it) },
                         )
 
                         SettingsSection.HISTORY -> HistorySection(
@@ -288,9 +297,9 @@ fun SettingsScreen(
                             onClear = { confirmClear = true },
                         )
 
-                        SettingsSection.ADS -> AdsSection(
-                            adFreeUntil = adFreeUntil,
-                            adsVisible = adsVisible,
+                        SettingsSection.ADS -> PlusSection(
+                            plusActive = plusActive,
+                            plusUntilMillis = adFreeUntil,
                         )
 
                         SettingsSection.PRIVACY -> PrivacySection()
@@ -303,7 +312,6 @@ fun SettingsScreen(
                 }
             }
 
-            AdBanner(visible = adsVisible)
         }
     }
 
@@ -590,9 +598,11 @@ private fun DetectionSection(
     detectFaces: Boolean,
     longNumbers: Boolean,
     extraHeuristics: Boolean,
+    faceMask: FaceMaskStyle,
     onDetectFaces: (Boolean) -> Unit,
     onLongNumbers: (Boolean) -> Unit,
     onExtraHeuristics: (Boolean) -> Unit,
+    onFaceMask: (FaceMaskStyle) -> Unit,
 ) {
     SwitchRow(
         icon = Icons.Rounded.Face,
@@ -600,6 +610,28 @@ private fun DetectionSection(
         body = stringResource(R.string.settings_detect_faces_body),
         checked = detectFaces,
         onCheckedChange = onDetectFaces,
+    )
+
+    Label(stringResource(R.string.editor_face_mask))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SelectChip(
+            label = stringResource(R.string.editor_face_mask_oval),
+            selected = faceMask == FaceMaskStyle.SOFT_OVAL,
+            icon = Icons.Rounded.FaceRetouchingNatural,
+            onClick = { onFaceMask(FaceMaskStyle.SOFT_OVAL) },
+        )
+        SelectChip(
+            label = stringResource(R.string.editor_face_mask_box),
+            selected = faceMask == FaceMaskStyle.BOX,
+            icon = Icons.Rounded.CropSquare,
+            onClick = { onFaceMask(FaceMaskStyle.BOX) },
+        )
+    }
+    Text(
+        text = stringResource(R.string.editor_face_mask_body),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 6.dp),
     )
     SwitchRow(
         icon = Icons.Rounded.Numbers,
@@ -622,10 +654,25 @@ private fun ExportSection(
     format: ExportFormat,
     size: Int,
     quality: Int,
+    defaultStyle: RedactionStyle,
     onFormat: (ExportFormat) -> Unit,
     onSize: (Int) -> Unit,
     onQuality: (Int) -> Unit,
+    onDefaultStyle: (RedactionStyle) -> Unit,
 ) {
+    // What a freshly opened image is redacted with — the choice people look for first.
+    Label(stringResource(R.string.settings_default_style))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        RedactionStyle.entries.forEach { style ->
+            SelectChip(
+                label = styleLabel(style),
+                selected = defaultStyle == style,
+                icon = styleIcon(style),
+                onClick = { onDefaultStyle(style) },
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
     Label(stringResource(R.string.settings_export_format))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ExportFormat.entries.forEach { entry ->
@@ -736,10 +783,8 @@ private fun HistorySection(
  * capability is behind this card.
  */
 @Composable
-private fun AdsSection(adFreeUntil: Long, adsVisible: Boolean) {
-    val context = LocalContext.current
-    val rewarded = rememberRewardedSlot()
-    var busy by remember { mutableStateOf(false) }
+private fun PlusSection(plusActive: Boolean, plusUntilMillis: Long) {
+    var showDialog by remember { mutableStateOf(false) }
 
     Text(
         text = stringResource(R.string.settings_ads_body),
@@ -748,10 +793,10 @@ private fun AdsSection(adFreeUntil: Long, adsVisible: Boolean) {
     )
     Spacer(Modifier.height(10.dp))
 
-    if (!adsVisible) {
-        val until = remember(adFreeUntil) {
+    if (plusActive) {
+        val until = remember(plusUntilMillis) {
             runCatching {
-                Instant.ofEpochMilli(adFreeUntil)
+                Instant.ofEpochMilli(plusUntilMillis)
                     .atZone(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
             }.getOrDefault("")
@@ -759,43 +804,22 @@ private fun AdsSection(adFreeUntil: Long, adsVisible: Boolean) {
         InfoRow(
             icon = Icons.Rounded.Verified,
             title = stringResource(R.string.settings_ads_free_until, until),
-            body = stringResource(R.string.settings_ads_remove_body),
-            tint = MaterialTheme.colorScheme.secondary,
+            body = stringResource(R.string.plus_active_body),
+            tint = MintSecondary,
         )
         return
     }
 
     androidx.compose.material3.Button(
-        onClick = {
-            if (!rewarded.isReady) {
-                context.toastOnMain(context.getString(R.string.settings_ads_unavailable))
-                return@Button
-            }
-            busy = true
-            rewarded.show(
-                onReward = {
-                    SettingsStore.instance.grantAdFree(
-                        System.currentTimeMillis() + AD_FREE_WINDOW_MILLIS,
-                    )
-                },
-                onFinished = { busy = false },
-            )
-        },
-        enabled = !busy,
+        onClick = { showDialog = true },
         modifier = Modifier
             .fillMaxWidth()
             .height(50.dp)
             .testTag(TestTags.SETTINGS_ADS_REWARD),
     ) {
-        if (busy) {
-            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(R.string.settings_ads_loading))
-        } else {
-            Icon(Icons.Rounded.PlayCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.settings_ads_remove))
-        }
+        Icon(Icons.Rounded.PlayCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.settings_ads_remove))
     }
     Text(
         text = stringResource(R.string.settings_ads_remove_body),
@@ -803,26 +827,41 @@ private fun AdsSection(adFreeUntil: Long, adsVisible: Boolean) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 6.dp),
     )
+
+    if (showDialog) {
+        PlusUnlockDialog(
+            title = stringResource(R.string.plus_title),
+            body = stringResource(R.string.plus_body),
+            confirmLabel = stringResource(R.string.plus_watch),
+            onDismiss = { showDialog = false },
+            onUnlocked = { showDialog = false },
+        )
+    }
 }
 
+/**
+ * Three statements and one disclosure. Each of the three is a property of the build rather than a
+ * promise: on-device processing is enforced by the detection code, "no account" by the absence of
+ * any auth dependency, and "no upload" by there being no call site that sends an image anywhere.
+ */
 @Composable
 private fun PrivacySection() {
     InfoRow(
         icon = Icons.Rounded.Lock,
-        title = stringResource(R.string.home_privacy_scan_title),
-        body = stringResource(R.string.settings_on_device_body),
+        title = stringResource(R.string.privacy_processing_title),
+        body = stringResource(R.string.privacy_processing_body),
         tint = VioletPrimary,
     )
     InfoRow(
-        icon = Icons.Rounded.WifiOff,
-        title = stringResource(R.string.home_privacy_offline_title),
-        body = stringResource(R.string.settings_no_internet_body),
+        icon = Icons.Rounded.Person,
+        title = stringResource(R.string.privacy_account_title),
+        body = stringResource(R.string.privacy_account_body),
         tint = MintSecondary,
     )
     InfoRow(
-        icon = Icons.Rounded.Image,
-        title = stringResource(R.string.home_privacy_export_title),
-        body = stringResource(R.string.settings_permissions_body),
+        icon = Icons.Rounded.CloudOff,
+        title = stringResource(R.string.privacy_upload_title),
+        body = stringResource(R.string.privacy_upload_body),
         tint = MaterialTheme.colorScheme.tertiary,
     )
     InfoRow(
@@ -830,6 +869,12 @@ private fun PrivacySection() {
         title = stringResource(R.string.home_privacy_ads_title),
         body = stringResource(R.string.home_privacy_ads_body),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = stringResource(R.string.settings_permissions_body),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
     )
 }
 

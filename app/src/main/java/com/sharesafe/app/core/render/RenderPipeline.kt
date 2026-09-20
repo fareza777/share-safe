@@ -3,6 +3,7 @@ package com.sharesafe.app.core.render
 import android.graphics.Bitmap
 import android.graphics.Rect
 import com.sharesafe.app.core.model.BeautifyConfig
+import com.sharesafe.app.core.model.FaceMaskStyle
 import com.sharesafe.app.core.model.IntRect
 import com.sharesafe.app.core.model.NormRect
 import com.sharesafe.app.core.model.RedactionStyle
@@ -25,6 +26,12 @@ object RenderPipeline {
         val crop: IntRect,
         /** Enabled redaction boxes in normalized source space. */
         val regions: List<NormRect>,
+        /**
+         * The subset of [regions] that is a person's face or profile picture. Kept separate so the
+         * renderer can mask it as an oval without changing what is hidden.
+         */
+        val faceRegions: List<NormRect> = emptyList(),
+        val faceMask: FaceMaskStyle = FaceMaskStyle.DEFAULT,
         val style: RedactionStyle,
         val strength: Float,
         val tintColor: Int = RedactionRenderer.DEFAULT_TINT,
@@ -67,11 +74,24 @@ object RenderPipeline {
                 .toPixels(source.width, source.height, crop, scale)
                 .toAndroidRect(base.width, base.height)
         }
+        val maskRects = request.faceRegions.mapNotNull { region ->
+            region
+                .toPixels(source.width, source.height, crop, scale)
+                .toAndroidRect(base.width, base.height)
+        }
 
-        val redacted = if (rects.isEmpty()) {
+        val redacted = if (rects.isEmpty() && maskRects.isEmpty()) {
             base
         } else {
-            val out = RedactionRenderer.render(base, rects, request.style, request.strength, request.tintColor)
+            val out = RedactionRenderer.render(
+                target = base,
+                rects = rects,
+                style = request.style,
+                strength = request.strength,
+                tintColor = request.tintColor,
+                maskRects = maskRects,
+                maskStyle = request.faceMask,
+            )
             if (out !== base) base.recycle()
             out
         }
@@ -88,7 +108,9 @@ object RenderPipeline {
                 padding + beautified.width - padding * 2,
                 padding + beautified.height - padding * 2,
             ),
-            redactedRects = rects.map { rect ->
+            // Masked faces are redacted areas too, so verification and the automatic repair must
+            // know about them exactly like any other box.
+            redactedRects = (rects + maskRects).map { rect ->
                 Rect(rect.left + padding, rect.top + padding, rect.right + padding, rect.bottom + padding)
             },
         )

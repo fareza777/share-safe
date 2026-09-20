@@ -11,7 +11,6 @@
     <string name="home_action_title">Protect a screenshot</string>
     <string name="home_action_body">Pick one image. Scanning, redaction, verification and repair all happen on their own.</string>
     <string name="home_action_badge">Automatic</string>
-    <string name="home_pick_title">Pick a screenshot</string>
     <string name="home_pick_body">Uses the Android photo picker — no gallery permission needed</string>
     <string name="home_stat_exports">Redacted</string>
     <string name="home_stat_regions">Areas hidden</string>
@@ -29,9 +28,6 @@
     <string name="home_redact_selected">Redact %1$d</string>
     <string name="home_batch_title">Batch redaction</string>
     <string name="home_batch_running">Redacting %1$d of %2$d…</string>
-    <string name="home_batch_done">%1$d images were redacted and saved to Pictures/ShareSafe.</string>
-    <string name="home_batch_partial">%1$d saved, %2$d failed. The originals were left untouched.</string>
-    <string name="home_batch_regions">%1$d areas hidden in total</string>
     <string name="home_media_disclosure_title">Gallery access</string>
     <string name="home_media_disclosure_body">ShareSafe asks for photo access only to list your newest screenshots on the home screen. Images are read on this device, redacted on this device, and never uploaded. Gallery access is optional — the system photo picker works without it.</string>
     <string name="home_media_disclosure_accept">Allow gallery access</string>
@@ -250,7 +246,6 @@
     <string name="settings_privacy">Privacy</string>
     <string name="settings_privacy_summary">What runs offline, and what an ad may see</string>
     <string name="settings_on_device_body">Scanning, redaction and verification all run on this device with bundled models.</string>
-    <string name="settings_no_internet_body">Nothing derived from your screenshot ever touches the network. The app’s only network use is the ad slot.</string>
     <string name="settings_permissions_body">Permissions: photo access, internet for ads, and the advertising ID. No location, no camera, no contacts.</string>
     <string name="settings_ads">Ads</string>
     <string name="settings_ads_summary">How this app stays free</string>
@@ -287,6 +282,92 @@
     <string name="about_replay_onboarding">Show the intro again</string>
     <string name="about_replay_body">The intro will appear at the next launch, with your settings untouched.</string>
     <string name="about_footer">Made to keep screenshots boring. No account, no upload, and no ad ever sees your image.</string>
+
+    <!-- Batch Protect -->
+    <string name="batch_title">Batch protect</string>
+    <string name="batch_subtitle_running">Protecting %1$d of %2$d…</string>
+    <string name="batch_subtitle_done">Protected %1$d of %2$d</string>
+    <string name="batch_working">Protecting…</string>
+    <string name="batch_finished">Finished</string>
+    <string name="batch_memory_note">Images are decoded one at a time and released before the next one opens, so tall screenshots never pile up in memory.</string>
+    <string name="batch_failed_note">%1$d could not be protected. Retry runs just those again.</string>
+    <string name="batch_summary_title">Batch complete</string>
+    <string name="batch_summary_body">%1$d of %2$d images redacted and verified.</string>
+    <string name="batch_summary_regions">Regions hidden: %1$d</string>
+    <string name="batch_summary_review">Worth a look: %1$d</string>
+    <string name="batch_share_all">Share %1$d images</string>
+    <string name="batch_share_body">One sheet with every redacted copy attached.</string>
+    <string name="batch_share_title">Share %1$d redacted images</string>
+    <string name="batch_share_empty">There is nothing to share yet.</string>
+    <string name="batch_share_failed">No app accepted the images.</string>
+    <string name="batch_share_one">Share</string>
+    <string name="batch_error_title">Batch stopped</string>
+    <string name="batch_unnamed">Screenshot</string>
+    <string name="batch_row_queued">Queued</string>
+    <string name="batch_row_working">Scanning…</string>
+    <string name="batch_row_failed">Failed — %1$s</string>
+    <string name="batch_row_review">%1$d regions · check</string>
+    <string name="batch_row_verified">%1$d regions verified</string>
+    <string name="batch_row_done">%1$d regions hidden</string>
+    <string name="batch_saved_note">Every result is saved to History as a redacted copy.</string>
+    <string name="batch_retry_failed">Retry %1$d failed</string>
+    <string name="batch_empty_title">Nothing selected</string>
+    <string name="batch_empty_body">Pick screenshots from the gallery to protect them in one pass.</string>
+    <string name="batch_detail_title">Preview</string>
+    <string name="batch_open_note">Open in the editor to add or remove regions. Anything you change is verified again before export.</string>
+    <string name="batch_open_in_editor">Open in editor</string>
+    <string name="batch_running_back">Batch protect keeps running.</string>
+    <string name="batch_limit_title">Protect all %1$d images?</string>
+    <string name="batch_limit_body">A free batch protects up to %1$d images at a time. A short video lifts the cap for 24 hours.</string>
+    <string name="batch_limit_watch">Watch and lift the cap</string>
+    <string name="batch_limit_first">Protect the first %1$d</string>
+
+    <!-- Chat privacy mode -->
+    <string name="editor_chat_title">Chat privacy mode</string>
+    <string name="editor_chat_body">Tuned for conversation screenshots: it hunts for the contact name, the avatar and the status bar that give away who you were talking to. Everything it finds stays editable by hand.</string>
+    <string name="editor_chat_suggest">Looks like a %1$s screenshot. Find the name and profile picture too?</string>
+    <string name="editor_chat_suggest_accept">Yes</string>
+    <string name="chat_off">Off</string>
+    <string name="chat_whatsapp">WhatsApp</string>
+    <string name="chat_telegram">Telegram</string>
+    <string name="chat_dm">DM</string>
+    <string name="category_name">Name</string>
+    <string name="category_avatar">Avatar</string>
+
+    <!-- Beautify -->
+    <string name="editor_preset_title">Looks</string>
+    <string name="editor_preset_body">Padding, corners, background and shadow in one tap. Every value stays adjustable below.</string>
+    <string name="editor_preset_locked_title">%1$s is a Plus look</string>
+    <string name="editor_preset_locked_body">A short video unlocks every look for 24 hours and removes the banners. The free looks stay free either way.</string>
+    <string name="editor_preset_use_free">Use a free look</string>
+    <string name="editor_beautify_shadow">Shadow</string>
+    <string name="editor_bg_solid">Solid</string>
+    <string name="preset_off">Original</string>
+    <string name="preset_clean">Clean</string>
+    <string name="preset_night">Night</string>
+    <string name="preset_solid">Solid</string>
+    <string name="preset_aurora">Aurora</string>
+    <string name="preset_studio">Studio</string>
+    <string name="editor_face_mask">Face cover</string>
+    <string name="editor_face_mask_oval">Soft oval</string>
+    <string name="editor_face_mask_box">Square</string>
+    <string name="editor_face_mask_body">An oval feathers the edge of a face cover so it reads as a soft blur instead of a censor box.</string>
+
+    <!-- Plus -->
+    <string name="plus_title">ShareSafe Plus</string>
+    <string name="plus_body">One short video unlocks 24 hours of no banners, no interstitials, every beautify look and an uncapped batch. Every redaction feature stays free.</string>
+    <string name="plus_watch">Watch a video</string>
+    <string name="plus_active_body">No banners, no interstitials, every look unlocked and an uncapped batch.</string>
+
+    <!-- Privacy statements -->
+    <string name="privacy_processing_title">Processed on device</string>
+    <string name="privacy_processing_body">Text recognition, pattern matching, barcode reading, face detection and every render step run on the phone, with the models shipped inside the app.</string>
+    <string name="privacy_account_title">No account required</string>
+    <string name="privacy_account_body">There is no sign-in, no profile and no identifier tied to you. Nothing to log in to, nothing to recover, nothing to leak.</string>
+    <string name="privacy_upload_title">Your screenshot is never uploaded</string>
+    <string name="privacy_upload_body">No code path sends an image, a file name or a scan result anywhere. History is a local folder; uninstalling takes it with it.</string>
+    <string name="history_reopen">Reopen in editor</string>
+    <string name="settings_default_style">Default redaction</string>
 
     <!-- Common -->
     <string name="action_back">Back</string>

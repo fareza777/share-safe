@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.sharesafe.app.core.export.ExportFormat
 import com.sharesafe.app.core.export.ExportOptions
+import com.sharesafe.app.core.model.BeautifyPreset
+import com.sharesafe.app.core.model.FaceMaskStyle
+import com.sharesafe.app.core.model.RedactionStyle
+import com.sharesafe.app.core.model.SensitiveKind
 import com.sharesafe.app.ui.theme.ThemePalette
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,6 +72,47 @@ class SettingsStore private constructor(context: Context) {
 
     private val _lastStyle = MutableStateFlow(prefs.getString(KEY_STYLE, null))
     val lastStyle: StateFlow<String?> = _lastStyle.asStateFlow()
+
+    /**
+     * The style a freshly opened image starts with. Distinct from [lastStyle], which is the style
+     * most recently used in this session — a user who experimented once should not have their
+     * default silently changed for them.
+     */
+    private val _defaultStyle =
+        MutableStateFlow(RedactionStyle.fromId(prefs.getString(KEY_DEFAULT_STYLE, null)))
+    val defaultStyle: StateFlow<RedactionStyle> = _defaultStyle.asStateFlow()
+
+    fun setDefaultStyle(style: RedactionStyle) {
+        prefs.edit().putString(KEY_DEFAULT_STYLE, style.id).apply()
+        _defaultStyle.value = style
+    }
+
+    /** How faces and avatars are masked: a box, or a feathered oval. */
+    private val _faceMask = MutableStateFlow(FaceMaskStyle.fromId(prefs.getString(KEY_FACE_MASK, null)))
+    val faceMask: StateFlow<FaceMaskStyle> = _faceMask.asStateFlow()
+
+    fun setFaceMask(style: FaceMaskStyle) {
+        prefs.edit().putString(KEY_FACE_MASK, style.id).apply()
+        _faceMask.value = style
+    }
+
+    /** Last beautify look the user picked, applied to the next image they open. */
+    private val _beautifyPreset =
+        MutableStateFlow(BeautifyPreset.fromId(prefs.getString(KEY_BEAUTIFY_PRESET, null)))
+    val beautifyPreset: StateFlow<BeautifyPreset> = _beautifyPreset.asStateFlow()
+
+    fun setBeautifyPreset(preset: BeautifyPreset) {
+        prefs.edit().putString(KEY_BEAUTIFY_PRESET, preset.id).apply()
+        _beautifyPreset.value = preset
+    }
+
+    /**
+     * Seconds remaining on the rewarded window, or 0. One video buys all three of: no banners, no
+     * interstitials, the premium beautify presets and an uncapped batch. Nothing about redaction
+     * itself is ever behind it.
+     */
+    fun plusRemainingMillis(nowMillis: Long = System.currentTimeMillis()): Long =
+        (_adFreeUntil.value - nowMillis).coerceAtLeast(0L)
 
     private val _lastStrength = MutableStateFlow(prefs.getFloat(KEY_STRENGTH, DEFAULT_STRENGTH))
     val lastStrength: StateFlow<Float> = _lastStrength.asStateFlow()
@@ -275,6 +320,22 @@ class SettingsStore private constructor(context: Context) {
         _shareCount.value = next
     }
 
+    /**
+     * The detection kinds a scan should leave switched off, derived from the user's Settings. Shared
+     * by the editor and Batch Protect so a batch cannot disagree with what the editor would have
+     * found for the same image.
+     */
+    fun defaultDisabledKinds(): Set<SensitiveKind> {
+        val disabled = SensitiveKind.entries.filterNot { it.defaultEnabled }.toMutableSet()
+        if (detectFaces.value) disabled.remove(SensitiveKind.FACE)
+        if (longNumbers.value) disabled.remove(SensitiveKind.LONG_NUMBER)
+        if (!extraHeuristics.value) {
+            disabled += SensitiveKind.NETWORK
+            disabled += SensitiveKind.PLATE
+        }
+        return disabled
+    }
+
     /** Convenience snapshot for exporters and the batch redactor. */
     fun exportOptions(): ExportOptions = ExportOptions(
         format = _exportFormat.value,
@@ -293,6 +354,9 @@ class SettingsStore private constructor(context: Context) {
         private const val KEY_ANIMATIONS = "animations"
         private const val KEY_HAPTICS = "haptics"
         private const val KEY_STYLE = "redaction_style"
+        private const val KEY_DEFAULT_STYLE = "default_redaction_style"
+        private const val KEY_FACE_MASK = "face_mask_style"
+        private const val KEY_BEAUTIFY_PRESET = "beautify_preset"
         private const val KEY_STRENGTH = "redaction_strength"
         private const val KEY_DETECT_FACES = "detect_faces"
         private const val KEY_LONG_NUMBERS = "long_numbers"

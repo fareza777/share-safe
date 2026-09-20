@@ -29,6 +29,13 @@ object AdsConfig {
     const val INTERSTITIAL_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
     const val REWARDED_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
 
+    /**
+     * How many images a free Batch Protect run may contain. Selecting the same images again in
+     * smaller groups is always possible, so this is a shortcut rather than a wall, and one rewarded
+     * video lifts it for 24 hours along with the banners.
+     */
+    const val FREE_BATCH_LIMIT = 5
+
     /** Fallback used when a request fails and the UI still has to render something. */
     fun describeFailure(message: String): String = "ad-load-failed: $message"
 }
@@ -43,11 +50,15 @@ object AdsConfig {
  */
 object InterstitialPolicy {
 
-    /** The first impression waits until sharing is an established habit, not a first-run accident. */
-    const val MIN_SHARES_BEFORE_FIRST = 2
+    /**
+     * The first impression waits until sharing is an established habit, not a first-run accident.
+     * Three exports also means a batch run, which is the moment the app has demonstrably saved the
+     * user real work.
+     */
+    const val MIN_SHARES_BEFORE_FIRST = 3
 
     /** At most one interstitial per this window, no matter how many exports happen. */
-    const val MIN_INTERVAL_MILLIS = 90_000L
+    const val MIN_INTERVAL_MILLIS = 120_000L
 
     fun shouldShow(shareCount: Int, lastShownAtMillis: Long, nowMillis: Long): Boolean {
         if (shareCount < MIN_SHARES_BEFORE_FIRST) return false

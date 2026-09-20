@@ -37,11 +37,25 @@ object TestTags {
     const val HISTORY_CALENDAR_DAY = "history-calendar-day"
     const val HISTORY_ITEM = "history-item"
     const val HISTORY_CLEAR = "history-clear"
+    const val HISTORY_REOPEN = "history-reopen"
+
+    // Batch Protect.
+    const val BATCH_SCREEN = "batch-screen"
+    const val BATCH_ROW = "batch-row"
+    const val BATCH_PROGRESS = "batch-progress"
+    const val BATCH_SHARE_ALL = "batch-share-all"
+    const val BATCH_RETRY = "batch-retry"
+    const val BATCH_SUMMARY = "batch-summary"
 
     const val EDITOR_STATUS = "editor-status"
     const val EDITOR_PREVIEW_SHARE = "editor-preview-share"
     const val EDITOR_PANEL_TOGGLE = "editor-panel-toggle"
     const val EDITOR_TAB = "editor-tab"
+    const val EDITOR_CHAT_SUGGESTION = "editor-chat-suggestion"
+    const val EDITOR_CHAT_SUGGEST_ACCEPT = "editor-chat-suggestion-accept"
+    const val EDITOR_CHAT_SUGGEST_DISMISS = "editor-chat-suggestion-dismiss"
+    const val EDITOR_CHAT_ROW = "editor-chat-row"
+    const val EDITOR_PRESET_ROW = "editor-preset-row"
 
     const val PREVIEW_VERIFY_BANNER = "preview-verify-banner"
     const val PREVIEW_SAFE_SHARE = "preview-safe-share"
@@ -55,4 +69,10 @@ object TestTags {
 
     /** Tag for one collapsible settings card, e.g. `settingsSection("detection")`. */
     fun settingsSection(id: String): String = "$SETTINGS_SECTION-$id"
+
+    /**
+     * Tag for one chip in a horizontal options row — a chat layout, a beautify preset. Addressed by
+     * the model's own id rather than its label, so the tests survive translation.
+     */
+    fun editorOption(id: String): String = "editor-option-$id"
 }

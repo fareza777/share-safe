@@ -2,7 +2,9 @@ package com.sharesafe.app.ui.editor
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Cake
 import androidx.compose.material.icons.rounded.CreditCard
@@ -37,7 +39,9 @@ import com.sharesafe.app.ui.theme.KindDob
 import com.sharesafe.app.ui.theme.KindEmail
 import com.sharesafe.app.ui.theme.KindFace
 import com.sharesafe.app.ui.theme.KindAddress
+import com.sharesafe.app.ui.theme.KindAvatar
 import com.sharesafe.app.ui.theme.KindLocation
+import com.sharesafe.app.ui.theme.KindName
 import com.sharesafe.app.ui.theme.KindNetwork
 import com.sharesafe.app.ui.theme.KindPassport
 import com.sharesafe.app.ui.theme.KindPlate
@@ -52,6 +56,8 @@ import com.sharesafe.app.ui.theme.KindSecret
 fun kindLabel(kind: SensitiveKind): String = stringResource(
     when (kind) {
         SensitiveKind.PHONE -> R.string.category_phone
+        SensitiveKind.NAME -> R.string.category_name
+        SensitiveKind.AVATAR -> R.string.category_avatar
         SensitiveKind.EMAIL -> R.string.category_email
         SensitiveKind.CARD -> R.string.category_card
         SensitiveKind.ID_NUMBER -> R.string.category_id_number
@@ -73,6 +79,8 @@ fun kindLabel(kind: SensitiveKind): String = stringResource(
 
 fun kindColor(kind: SensitiveKind): Color = when (kind) {
     SensitiveKind.PHONE -> KindPhone
+    SensitiveKind.NAME -> KindName
+    SensitiveKind.AVATAR -> KindAvatar
     SensitiveKind.EMAIL -> KindEmail
     SensitiveKind.CARD -> KindCard
     SensitiveKind.ID_NUMBER -> KindIdentity
@@ -93,6 +101,8 @@ fun kindColor(kind: SensitiveKind): Color = when (kind) {
 
 fun kindIcon(kind: SensitiveKind): ImageVector = when (kind) {
     SensitiveKind.PHONE -> Icons.Rounded.Phone
+    SensitiveKind.NAME -> Icons.Rounded.Person
+    SensitiveKind.AVATAR -> Icons.Rounded.AccountCircle
     SensitiveKind.EMAIL -> Icons.Rounded.Email
     SensitiveKind.CARD -> Icons.Rounded.CreditCard
     SensitiveKind.ID_NUMBER -> Icons.Rounded.Badge
