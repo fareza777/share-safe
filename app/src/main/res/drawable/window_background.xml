@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Painted by the system before the first Compose frame, so a cold start opens on-brand instead
+     of a white flash. The Compose splash then takes over with the same palette. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="315"
+        android:startColor="#6C5CE7"
+        android:centerColor="#3E8EA8"
+        android:endColor="#00B894"
+        android:type="linear" />
+</shape>

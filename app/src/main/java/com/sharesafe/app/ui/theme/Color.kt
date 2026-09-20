@@ -1,0 +1,60 @@
+package com.sharesafe.app.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+/** Brand palette — deliberately violet/mint rather than the usual "privacy green". */
+val VioletPrimary = Color(0xFF6C5CE7)
+val VioletPrimaryDark = Color(0xFFB9AEFF)
+val VioletContainer = Color(0xFFE7E2FF)
+val VioletContainerDark = Color(0xFF2A2350)
+val MintSecondary = Color(0xFF00B894)
+val MintSecondaryDark = Color(0xFF5FE3C0)
+val MintContainer = Color(0xFFD3F7EC)
+val MintContainerDark = Color(0xFF113B33)
+val CoralTertiary = Color(0xFFFF7A59)
+val CoralContainer = Color(0xFFFFE2D8)
+
+val SurfaceLight = Color(0xFFFBFAFF)
+val SurfaceContainerLight = Color(0xFFF1EFF9)
+val SurfaceContainerHighLight = Color(0xFFEAE7F5)
+val OnSurfaceLight = Color(0xFF14121F)
+val OnSurfaceVariantLight = Color(0xFF4A4658)
+val OutlineLight = Color(0xFFC9C4D8)
+
+val SurfaceDark = Color(0xFF0C0C16)
+val SurfaceContainerDark = Color(0xFF14141F)
+val SurfaceContainerHighDark = Color(0xFF1D1D2B)
+val OnSurfaceDark = Color(0xFFECEBF5)
+val OnSurfaceVariantDark = Color(0xFFB6B2C6)
+val OutlineDark = Color(0xFF3A374A)
+
+val OnPrimaryContainerLight = Color(0xFF1B1340)
+val OnPrimaryContainerDark = Color(0xFFE7E2FF)
+val OnSecondaryContainerLight = Color(0xFF06322A)
+val OnSecondaryContainerDark = Color(0xFFD3F7EC)
+val OnPrimaryDark = Color(0xFF221A4D)
+val OnSecondaryDark = Color(0xFF00382C)
+
+val ErrorLight = Color(0xFFB3261E)
+val ErrorContainerLight = Color(0xFFF9DEDC)
+val ErrorDark = Color(0xFFFFB4AB)
+val ErrorContainerDark = Color(0xFF8C1D18)
+
+/** Highlight colours for the detection overlay, one per category family. */
+val KindPhone = Color(0xFF4C8DFF)
+val KindEmail = Color(0xFF00B894)
+val KindCard = Color(0xFFFF7A59)
+val KindIdentity = Color(0xFFF2B705)
+val KindAccount = Color(0xFF9B51E0)
+val KindOtp = Color(0xFFFF4D8D)
+val KindSecret = Color(0xFF00C2FF)
+val KindPassport = Color(0xFF2F6FED)
+val KindDob = Color(0xFFD7263D)
+val KindLocation = Color(0xFF7BC950)
+val KindNetwork = Color(0xFF00A8A8)
+val KindPlate = Color(0xFF6D5DF6)
+val KindAddress = Color(0xFFB58B00)
+val KindNumber = Color(0xFF8D99AE)
+val KindCode = Color(0xFF1DD1A1)
+val KindFace = Color(0xFFFF9F43)
+val KindManual = Color(0xFFE8E8F5)

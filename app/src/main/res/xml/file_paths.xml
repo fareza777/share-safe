@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path
+        name="shared_images"
+        path="share/" />
+    <!-- History keeps the redacted result only, never the original screenshot; sharing one of
+         those copies again is a normal part of the flow. -->
+    <files-path
+        name="history_images"
+        path="history/" />
+</paths>
